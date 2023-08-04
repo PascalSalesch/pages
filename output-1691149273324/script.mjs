@@ -1,0 +1,2 @@
+!function(){"use strict";console.log("script.mjs has been loaded")}();
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoic2NyaXB0LmpzIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi8uLi8uLi8uLi90bXAvc291cmNlLVBhc2NhbFNhbGVzY2gtcGFnZXMtbGF0ZXN0L2V4YW1wbGUvYXNzZXRzL3NjcmlwdC5tanMiXSwic291cmNlc0NvbnRlbnQiOlsiY29uc29sZS5sb2coJ3NjcmlwdC5tanMgaGFzIGJlZW4gbG9hZGVkJylcbiJdLCJuYW1lcyI6WyJjb25zb2xlIiwibG9nIl0sIm1hcHBpbmdzIjoieUJBQUFBLFFBQVFDLElBQUkifQ==
