@@ -8,12 +8,8 @@ import PageBuilder from './classes/PageBuilder.mjs'
 import * as defaultPagesRc from '../pagesrc.mjs'
 import getCliArgs from './utils/getCliArgs.mjs'
 
-// Get the absolute path to this file
-const __filename = url.fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
 // run the main function if this file is executed directly from cmd
-process.nextTick(() => {
+process.nextTick(async () => {
   const cwd = getCliArgs('cwd', 'string', { defaultValue: undefined })
   const output = getCliArgs('output', 'string', { defaultValue: undefined })
   const port = getCliArgs('port', 'string', { defaultValue: undefined })
