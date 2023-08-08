@@ -2,7 +2,7 @@
   "name": "@pascalsalesch/pages",
   "version": "0.0.1",
   "description": "A build tool and server, designed to simplify the process of building and deploying web pages.",
-  "main": "src/pages.mjs",
+  "main": "src/classes/PageBuilder.mjs",
   "type": "module",
   "bin": {
     "pages": "src/pages.mjs"
