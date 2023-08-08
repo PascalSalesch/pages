@@ -1,0 +1,36 @@
+name: '@pascalsalesch/pages'
+description: 'A workflow action to build and deploy web pages.'
+inputs:
+  source:
+    description: 'The source repository to build from.'
+    required: false
+    default: '{org}/{repo}@{branch}'
+  sourceToken:
+    description: 'The token to use to checkout the source repository.'
+    required: true
+  target:
+    description: 'The repository to deploy to.'
+    required: false
+    default: '{org}/{repo}@gh-pages'
+  targetToken:
+    description: 'The token to use to push to the target repository.'
+    required: true
+  targetOutput:
+    description: 'The directory to build to in the target repository. (The prefix will be added to this path. URLs will not be prefixed.)'
+    required: false
+    default: '.'
+  targetKeep:
+    description: 'Comma-seperated list of regexes to keep in the target repository (Does not protect from overwriting).'
+    required: false
+    default: ''
+  prefix:
+    description: 'The prefix to use.'
+    required: false
+    default: ''
+  suffix:
+    description: 'The suffix to use.'
+    required: false
+    default: ''
+runs:
+  using: 'node16'
+  main: 'action/dist/index.mjs'

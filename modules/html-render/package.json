@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "description": "",
+  "main": "html-render.mjs",
+  "type": "module",
+  "dependencies": {
+    "html-minifier-terser": "^7.2.0"
+  }
+}

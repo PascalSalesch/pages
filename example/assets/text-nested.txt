@@ -1,0 +1,1 @@
+A text file that is referenced only in a partial.
