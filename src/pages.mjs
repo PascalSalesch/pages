@@ -2,7 +2,6 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import * as url from 'node:url'
 
 import PageBuilder from './classes/PageBuilder.mjs'
 import * as defaultPagesRc from '../pagesrc.mjs'
