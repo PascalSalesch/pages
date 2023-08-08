@@ -13,7 +13,7 @@ const __filename = url.fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 // run the main function if this file is executed directly from cmd
-if ([__filename, path.resolve(__dirname, '..')].includes(path.resolve(process.argv[1]))) {
+process.nextTick(() => {
   const cwd = getCliArgs('cwd', 'string', { defaultValue: undefined })
   const output = getCliArgs('output', 'string', { defaultValue: undefined })
   const port = getCliArgs('port', 'string', { defaultValue: undefined })
@@ -22,12 +22,12 @@ if ([__filename, path.resolve(__dirname, '..')].includes(path.resolve(process.ar
   const prefix = getCliArgs('prefix', 'string', { defaultValue: '' })
   const suffix = getCliArgs('suffix', 'string', { defaultValue: '' })
   await main({ cwd, output, watch, port, verbose, prefix, suffix })
-}
+})
 
 /**
  * @fileoverview This file exports all functionality of the pages module.
  */
-export default async function main (options = {}) {
+async function main (options = {}) {
   options.cwd = options.cwd ? path.isAbsolute(options.cwd) ? options.cwd : path.resolve(process.cwd(), options.cwd) : process.cwd()
 
   // retrieve the config from pagesrc.mjs
