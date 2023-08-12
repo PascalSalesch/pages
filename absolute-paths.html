@@ -1,0 +1,32 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="canonical" href="/absolute/" />                        <!-- this will generate /absolute/index.html -->
+    <script src="/example/assets/script.mjs"></script>                <!-- included using the root path, instead of the relative path -->
+    <link rel="stylesheet" href="/example/assets/tailwind.css" />
+    <link rel="stylesheet" href="/example/assets/style.css" />        <!-- included using the root path, instead of the relative path -->
+    <title>Example - Absolute File Paths</title>
+
+    <!-- Test assets -->
+    <link rel="icon" href="/example/assets/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/example/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/example/assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/example/assets/favicon-16x16.png">
+    <link rel="manifest" href="/example/assets/site.webmanifest">
+  </head>
+  <body class="bg-red-100">
+    <h1>Example</h1>
+    ${await include('/example/partial/partial.html')}
+    <img src="/example/assets/image.webp" />                          <!-- included using the root path, instead of the relative path -->
+
+    <a href="/example/assets/text.txt">A link to a text file</a><br>
+    <a href="/example/relative-paths.html">Visit example with relative paths</a><br>
+    <br>
+    Build date: ${date}
+  </body>
+</html>
+
+<!-- An example: setting context variables at build time -->
+<script type="module" target="body">
+  export const date = (new Date()).toDateString()
+</script>

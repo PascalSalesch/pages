@@ -1,1 +1,24 @@
-<!doctype html><html><head><meta charset="utf-8"><link href="/pages/variable-in-asset-ref.html" rel="canonical"/><title>Example - Variable in asset reference</title></head><body class="bg-red-100"><h1>Example</h1><a href="/pages/variable-in-asset-ref.html">I'm located here</a><br><img alt="Elva dressed as a fairy" sizes="(max-width: 600px) 480px, 800px" src="/pages/image-800w.jpg" srcset="/pages/image-480w.jpg 480w, /pages/image-800w.jpg 800w"/></body></html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="canonical" href="${url}" />
+    <title>Example - Variable in asset reference</title>
+  </head>
+  <body class="bg-red-100">
+    <h1>Example</h1>
+    <a href="${url}">I'm located here</a><br>
+
+    <img
+      srcset="assets/image-480w.jpg 480w, assets/image-800w.jpg 800w"
+      sizes="(max-width: 600px) 480px, 800px"
+      src="assets/image-800w.jpg"
+      alt="Elva dressed as a fairy"
+    />
+
+  </body>
+</html>
+
+<!-- An example: setting context variables at build time -->
+<script type="module" target="head" target="body">
+  export const url = '/variable-in-asset-ref'
+</script>
