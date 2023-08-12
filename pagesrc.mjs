@@ -52,8 +52,9 @@ export const modules = [
  * @param {string} event.filepath - The path to the file.
  * @param {boolean} event.isDefaultPrevented - Whether the default action has been prevented.
  * @param {function} event.preventDefault - A function that prevents the default action.
+ * @param {function} event.setOuterHTML - A function that sets the outerHTML for the meta call.
  */
-export async function preflight ({ filePath, relativeFilePath, preventDefault, isDefaultPrevented }) {
+export async function preflight ({ filePath, relativeFilePath, preventDefault, setOuterHTML, isDefaultPrevented }) {
   if (isDefaultPrevented) return
   if (!(filePath.endsWith('.html'))) return preventDefault()
 
@@ -71,6 +72,10 @@ export async function preflight ({ filePath, relativeFilePath, preventDefault, i
 
     // make sure the file contains a canonical link
     if (line.match(/<link[^>]+rel=['"]canonical['"]/i) && line.match(/<link[^>]+href=['"]/i)) {
+      // get the link tag of the line
+      const linkTag = line.match(/<link[^>]+>/i)[0]
+      setOuterHTML(linkTag)
+
       stream.close()
       return
     }
@@ -82,6 +87,7 @@ export async function preflight ({ filePath, relativeFilePath, preventDefault, i
 
   // warn about missing canonical link
   console.warn(`[PageBuilder] [preflight] File ${relativeFilePath} does not contain a canonical link.`)
+  setOuterHTML(`<link rel="canonical" href="${relativeFilePath}" />`)
 }
 
 /**

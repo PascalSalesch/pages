@@ -167,13 +167,16 @@ export default class PageBuilder extends events.EventEmitter {
 
     // emit preflight event for each file
     const files = []
+    const outerHTML = {}
     for (const filePath of allFiles) {
       const event = {
         filePath,
         relativeFilePath: path.relative(this.cwd, filePath),
+        outerHTML: '',
         pageBuilder: this,
         isDefaultPrevented: false,
-        preventDefault: () => { event.isDefaultPrevented = true }
+        preventDefault: () => { event.isDefaultPrevented = true },
+        setOuterHTML: (outerHTML) => { event.outerHTML = outerHTML }
       }
 
       await this.emit('preflight', event)
@@ -184,6 +187,7 @@ export default class PageBuilder extends events.EventEmitter {
       }
 
       files.push(filePath)
+      outerHTML[filePath] = event.outerHTML
     }
 
     // create a Page instance for each file
@@ -196,9 +200,11 @@ export default class PageBuilder extends events.EventEmitter {
 
     // add meta information to each page
     for (const page of this.pages) {
+      const pageOuterHTML = outerHTML[page.id] || ''
       const event = {
         page,
         pageBuilder: this,
+        outerHTML: pageOuterHTML,
         isDefaultPrevented: false,
         preventDefault: () => { event.isDefaultPrevented = true }
       }
