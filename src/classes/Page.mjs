@@ -43,16 +43,6 @@ export default class Page {
    */
   set rel (value) {
     if (this.#rel) throw new Error(`The purpose of page ${this.id} has already been set to ${this.#rel}`)
-    const validValues = [
-      'canonical', // Index HTML pages
-      'stylesheet', // CSS files
-      'script', // JS files
-      'manifest', // Manifest files
-      'icon', // Icon files
-      'image', // Image files
-      'source' // Video,Picture files
-    ]
-    if (!validValues.includes(value)) throw new Error(`The purpose of page ${this.id} must be one of ${validValues.join(', ')}`)
     this.#rel = value
   }
 
