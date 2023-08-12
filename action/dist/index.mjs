@@ -10076,7 +10076,7 @@ async function main () {
 
   // build the pages
   external_node_child_process_namespaceObject.execSync('npm install --production', { cwd: root, stdio: 'inherit' })
-  external_node_child_process_namespaceObject.execSync(`node . --cwd=${source} --output=${tmp} --prefix=${prefix} --suffix=${suffix} --verbose`, { cwd: root, stdio: 'inherit' })
+  external_node_child_process_namespaceObject.execSync(`node ./src/pages.mjs --cwd=${source} --output=${tmp} --prefix=${prefix} --suffix=${suffix} --verbose`, { cwd: root, stdio: 'inherit' })
 
   // commit changes
   try {

@@ -63,7 +63,7 @@ export default async function main () {
 
   // build the pages
   cmd.execSync('npm install --production', { cwd: root, stdio: 'inherit' })
-  cmd.execSync(`node . --cwd=${source} --output=${tmp} --prefix=${prefix} --suffix=${suffix} --verbose`, { cwd: root, stdio: 'inherit' })
+  cmd.execSync(`node ./src/pages.mjs --cwd=${source} --output=${tmp} --prefix=${prefix} --suffix=${suffix} --verbose`, { cwd: root, stdio: 'inherit' })
 
   // commit changes
   try {
