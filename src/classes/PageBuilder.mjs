@@ -200,11 +200,10 @@ export default class PageBuilder extends events.EventEmitter {
 
     // add meta information to each page
     for (const page of this.pages) {
-      const pageOuterHTML = outerHTML[page.id] || ''
       const event = {
         page,
         pageBuilder: this,
-        outerHTML: pageOuterHTML,
+        outerHTML: outerHTML[page.id] || '',
         isDefaultPrevented: false,
         preventDefault: () => { event.isDefaultPrevented = true }
       }
