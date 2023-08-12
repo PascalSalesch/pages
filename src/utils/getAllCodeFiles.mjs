@@ -43,7 +43,7 @@ async function getRegExpForIgnoredFiles (gitignoreFile) {
   for (const line of ['.gitignore', '.git', ...lines]) {
     if (line.startsWith('#') || line.trim() === '') continue
     // convert glob to regex
-    const regexStr = line.replaceAll('.', '\\.').replaceAll('*', '.*').replaceAll('/', '\\/')
+    const regexStr = line.trim().replaceAll('.', '\\.').replaceAll('*', '.*').replaceAll('/', '\\/')
     ignore.push(new RegExp(regexStr, 'i'))
   }
   return ignore
