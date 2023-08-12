@@ -190,7 +190,6 @@ export default class PageBuilder extends events.EventEmitter {
     for (const filePath of files) {
       if (this.pages.find(page => page.id === filePath)) continue
       const page = new Page(filePath, { cwd: this.cwd })
-      page.rel = 'canonical'
       await this.emit('page', { page })
       this.pages.push(page)
     }
@@ -204,6 +203,7 @@ export default class PageBuilder extends events.EventEmitter {
         preventDefault: () => { event.isDefaultPrevented = true }
       }
       await this.emit('meta', event)
+      if (!(event.isDefaultPrevented)) page.rel = 'canonical'
     }
 
     // create a clean output directory
