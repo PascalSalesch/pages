@@ -203,7 +203,7 @@ export default class PageBuilder extends events.EventEmitter {
         preventDefault: () => { event.isDefaultPrevented = true }
       }
       await this.emit('meta', event)
-      if (!(event.isDefaultPrevented)) page.rel = 'canonical'
+      if (!(event.isDefaultPrevented) && !(page.rel)) page.rel = 'canonical'
     }
 
     // create a clean output directory

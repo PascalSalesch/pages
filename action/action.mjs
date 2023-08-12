@@ -33,8 +33,8 @@ const keep = [
   /^\.git/
 ]
 
-// run the main function if this file is executed directly from cmd
-if (__filename === path.resolve(process.argv[1])) process.nextTick(main)
+// run the main function
+process.nextTick(main)
 
 /**
  *

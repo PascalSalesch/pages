@@ -1414,6 +1414,19 @@ class HttpClientResponse {
             }));
         });
     }
+    readBodyBuffer() {
+        return __awaiter(this, void 0, void 0, function* () {
+            return new Promise((resolve) => __awaiter(this, void 0, void 0, function* () {
+                const chunks = [];
+                this.message.on('data', (chunk) => {
+                    chunks.push(chunk);
+                });
+                this.message.on('end', () => {
+                    resolve(Buffer.concat(chunks));
+                });
+            }));
+        });
+    }
 }
 exports.HttpClientResponse = HttpClientResponse;
 function isHttps(requestUrl) {
@@ -1917,7 +1930,13 @@ function getProxyUrl(reqUrl) {
         }
     })();
     if (proxyVar) {
-        return new URL(proxyVar);
+        try {
+            return new URL(proxyVar);
+        }
+        catch (_a) {
+            if (!proxyVar.startsWith('http://') && !proxyVar.startsWith('https://'))
+                return new URL(`http://${proxyVar}`);
+        }
     }
     else {
         return undefined;
@@ -9985,7 +10004,7 @@ async function getRegExpForIgnoredFiles (gitignoreFile) {
   for (const line of ['.gitignore', '.git', ...lines]) {
     if (line.startsWith('#') || line.trim() === '') continue
     // convert glob to regex
-    const regexStr = line.replaceAll('.', '\\.').replaceAll('*', '.*').replaceAll('/', '\\/')
+    const regexStr = line.trim().replaceAll('.', '\\.').replaceAll('*', '.*').replaceAll('/', '\\/')
     ignore.push(new RegExp(regexStr, 'i'))
   }
   return ignore
@@ -10027,8 +10046,8 @@ const keep = [
   /^\.git/
 ]
 
-// run the main function if this file is executed directly from cmd
-if (action_filename === external_node_path_namespaceObject.resolve(process.argv[1])) process.nextTick(main)
+// run the main function
+process.nextTick(main)
 
 /**
  *
@@ -10062,7 +10081,7 @@ async function main () {
   // commit changes
   try {
     const options = { cwd: target, stdio: 'inherit' }
-    external_node_child_process_namespaceObject.execSync(`mv ${tmp}/${prefix ? `${prefix}/` : '/'}* ${targetOutput}`, options)
+    external_node_child_process_namespaceObject.execSync(`mv ${tmp}/${prefix ? `${prefix}/*` : '*'} ${targetOutput}`, options)
     external_node_child_process_namespaceObject.execSync('git add .', options)
     external_node_child_process_namespaceObject.execSync(`git commit -m "Page Update\nFrom: https://github.com/${actionRepo}/actions/runs/${github.context.runId}"`, options)
     external_node_child_process_namespaceObject.execSync(`git push origin ${target_branch}`, options)
