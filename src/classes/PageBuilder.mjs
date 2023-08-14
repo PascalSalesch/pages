@@ -120,7 +120,8 @@ export default class PageBuilder extends events.EventEmitter {
       'preflight',
       'page',
       'meta',
-      // get pathname events (getCanonicalPathnames)
+      'transform',
+      // listeners for any rel extension, i.e.: `${eventName}OfCanonical`
       ...(Object.entries(options).filter(([eventName, listener]) => {
         return typeof listener === 'function' && (
           eventName.startsWith('getPathnames') ||
