@@ -9,6 +9,8 @@ import { nodeResolve } from '@rollup/plugin-node-resolve'
 import resolve from '../../src/utils/resolve.mjs'
 import getContent from '../../src/utils/getContent.mjs'
 
+import rollupInlinePlugin from './rollupInlinePlugin.mjs'
+
 /**
  * Minifies HTML.
  * @param {object} event - The event object.
@@ -38,32 +40,4 @@ export async function transformOfScript (event) {
 
   await bundle.close()
   event.content = code
-}
-
-/**
- * Entry chunk for rollup. This allows dynamic content to be bundled.
- * @param {string} content - The content to inline.
- * @param {string} filename - The pathname of the file.
- * @returns {import('rollup').Plugin}
- */
-function rollupInlinePlugin (content, filename) {
-  const name = filename
-  return {
-    name: 'inline',
-    resolveId (source, importer) {
-      if (source === filename) return name
-      if (importer === name) {
-        if (filename && source.startsWith('.')) {
-          const resolved = path.resolve(path.dirname(filename), source)
-          if (resolved === filename) return name
-          if (fs.existsSync(resolved)) return resolved
-        }
-      }
-      return null
-    },
-    load (id) {
-      if (id === name) return content
-      return null
-    }
-  }
 }
