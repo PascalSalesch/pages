@@ -1,3 +1,6 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+
 /**
  * Entry chunk for rollup. This allows dynamic content to be bundled.
  * @param {string} content - The content to inline.
