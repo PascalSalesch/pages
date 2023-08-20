@@ -16,7 +16,8 @@ process.nextTick(async () => {
   const verbose = getCliArgs('verbose', 'flag', { defaultValue: undefined })
   const prefix = getCliArgs('prefix', 'string', { defaultValue: '' })
   const suffix = getCliArgs('suffix', 'string', { defaultValue: '' })
-  await main({ cwd, output, watch, port, verbose, prefix, suffix })
+  const keep = getCliArgs('keep', 'list', { defaultValue: [] })
+  await main({ cwd, output, watch, port, verbose, prefix, suffix, keep })
 })
 
 /**
@@ -48,6 +49,7 @@ async function main (options = {}) {
   if (options.port || !config.port) config.port = options.port || 8080
   if (options.prefix) config.prefix = options.prefix
   if (options.suffix) config.suffix = options.suffix
+  if (options.keep) config.keep = options.keep
 
   // create a new PageBuilder instance
   const builder = new PageBuilder(config)

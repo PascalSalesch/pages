@@ -50,6 +50,9 @@ export default class PageBuilder extends events.EventEmitter {
    * @param {function} [options.page] - A function that is called for each page that is created.
    * @param {function} [options.meta] - A function that is called for each page that is created to add meta information to the page.
    * @param {string} [options.output] - The directory to output the pages to.
+   * @param {string} [options.prefix] - A prefix that is added to all pathnames.
+   * @param {string} [options.suffix] - A suffix that is added to all pathnames.
+   * @param {string[]} [options.keep] - A list of files and directories that should not be deleted when the output directory is cleaned.
    */
   constructor (options = {}) {
     super()
@@ -58,6 +61,7 @@ export default class PageBuilder extends events.EventEmitter {
     this.verbose = options.verbose || false
     this.prefix = (options.prefix && (options.prefix.startsWith('/') ? options.prefix : `/${options.prefix}`)) || ''
     this.suffix = options.suffix || ''
+    this.keep = options.keep || []
 
     if (this.verbose) {
       // preflight is emitted for all files that are read and can be used to filter out files that should not be parsed
@@ -213,8 +217,8 @@ export default class PageBuilder extends events.EventEmitter {
     }
 
     // create a clean output directory
-    if (fs.existsSync(this.output)) await clean(this.output)
-    fs.mkdirSync(this.output, { recursive: true })
+    if (fs.existsSync(this.output)) await clean(this.output, { keep: this.keep })
+    if (!(fs.existsSync(this.output))) fs.mkdirSync(this.output, { recursive: true })
 
     // build each page
     const pages = await Promise.all(this.pages.map((page) => this.emit('build', { page })))
