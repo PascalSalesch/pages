@@ -44,7 +44,6 @@ export async function transformOfStylesheet (event) {
       const twConfigModule = (await import(twConfig))
       const twConfigContent = twConfigModule.content || twConfigModule.default?.content
       const sources = (twConfigContent && (await glob(twConfigContent, { cwd: event.pageBuilder.cwd }))) || []
-      console.log(sources)
       for (const source of sources) event.page.addSource(source)
     } else {
       for (const file of (twConfig.content || [])) {
