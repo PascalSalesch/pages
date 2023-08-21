@@ -32,6 +32,7 @@ export async function transformOfStylesheet (event) {
 
   // add sources to page
   map.toJSON().sources.forEach(source => {
+    if (source.trim() === '<no source>') return
     source = resolve(source, [process.cwd(), ...roots])
     event.page.addSource(source)
   })
@@ -40,8 +41,10 @@ export async function transformOfStylesheet (event) {
   if (twConfig) {
     if (typeof twConfig === 'string') {
       event.page.addSource(twConfig)
-      const twConfigContent = (await import(twConfig))?.content
+      const twConfigModule = (await import(twConfig))
+      const twConfigContent = twConfigModule.content || twConfigModule.default?.content
       const sources = (twConfigContent && (await glob(twConfigContent, { cwd: event.pageBuilder.cwd }))) || []
+      console.log(sources)
       for (const source of sources) event.page.addSource(source)
     } else {
       for (const file of (twConfig.content || [])) {
