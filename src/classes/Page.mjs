@@ -52,6 +52,12 @@ export default class Page {
   #buildPromise = {}
 
   /**
+   * Ensures that `--watch` will update previously build pages, as well.
+   * @type {string[]} - A list of pathnames that have been used to build this page.
+   */
+  #pathnamesHistory = []
+
+  /**
    * @type {string[]} - A list of ids of the files that modify the content of this page.
    */
   #sources = []
@@ -159,7 +165,10 @@ export default class Page {
    */
   async #build (pageBuilder) {
     const pagesWithSameRel = pageBuilder.pages.filter(page => page.rel === this.rel).map(page => page.id)
-    const pathnamesList = await pageBuilder.getPathnames(this) || [pageInfo.getPathname(this.id, pagesWithSameRel, { pageBuilder })]
+    const pathnamesList = (await pageBuilder.getPathnames(this) || [pageInfo.getPathname(this.id, pagesWithSameRel, { pageBuilder })])
+      .concat(this.#pathnamesHistory)
+      .filter((pathname, index, pathnames) => pathnames.indexOf(pathname) === index)
+    this.#pathnamesHistory = pathnamesList.filter(pathname => pathname.indexOf('${') === -1)
     const pathnames = pathnamesList.map(pathname => {
       if (pathname.indexOf('${') !== -1) {
         const parts = splitByTemplateLiterals(pathname)
