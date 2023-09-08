@@ -35,8 +35,17 @@ export default function splitByTemplateLiterals (str) {
         }
       } else {
         currentPart = currentPart + current
+        if (i === str.length - 1) {
+          parts.push({ type: 'static', value: currentPart })
+          currentPart = ''
+        }
       }
     }
+  }
+
+  if (currentPart) {
+    if (depth > 0) throw new Error(`Invalid template literal. Missing ${depth} '}'`)
+    else throw new Error(`Invalid template literal. Unknown: ${currentPart}`)
   }
 
   return parts
