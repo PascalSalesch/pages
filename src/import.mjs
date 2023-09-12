@@ -45,6 +45,23 @@ export function resolve (file) {
  * @param {string|number} id - The id of the url parameter.
  * @returns {string}
  */
-export function getUrlParameters (id) {
-  return urlParts[Number(id) - 1]
+export function getUrlParameter (id) {
+  return Object.values(urlParts)[Number(id) - 1]
+}
+
+/**
+ * Retrieves the value of a dynamic url parameter.
+ * @param {string} id - The id of the url parameter.
+ * @returns {string}
+ */
+export function getUrlParameterByName (name) {
+  return urlParts[name]
+}
+
+/**
+ * Retrieves the value of a dynamic url parameter.
+ * @returns {string[]}
+ */
+export function getDependencies () {
+  return []
 }

@@ -2,6 +2,7 @@
   <head>
     <meta charset="utf-8">
     <link rel="canonical" href="/" />                         <!-- this will generate /index.html -->
+    <meta http-equiv="Content-Security-Policy" content="${await getContentSecurityPolicy()}">
     <script src="assets/script.mjs"></script>                 <!-- included using the relative path, instead of the absolute root path -->
     <link rel="stylesheet" href="assets/tailwind.css" />
     <link rel="stylesheet" href="assets/style.css" />         <!-- included using the relative path, instead of the absolute root path -->
@@ -28,5 +29,12 @@
 
 <!-- An example: setting context variables at build time -->
 <script type="module" target="body">
+  import { getDependencies } from '@pascalsalesch/pages'
+
   export const date = (new Date()).toDateString()
+
+  export function getContentSecurityPolicy () {
+    console.log(getDependencies())
+    return "default-src 'self'; script-src 'self'"
+  }
 </script>

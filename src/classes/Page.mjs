@@ -210,16 +210,20 @@ export default class Page {
       // build all possible paths
       const pathnames = transformUrlParts(urlParts)
       for (const { path, variables } of pathnames) {
-        const dynamicVariables = pathname.reduce((dynamicVariables, pathPart, index) => {
-          if (pathPart.type === 'dynamic') dynamicVariables[`\${${pathPart.value}}`] = variables[index]
-          return dynamicVariables
-        }, {})
+        const urlParts = {}
+        const dynamicVariables = {}
+        for (const index in pathname) {
+          const pathPart = pathname[index]
+          if (pathPart.type !== 'dynamic') continue
+          dynamicVariables[`\${${pathPart.value}}`] = variables[index]
+          urlParts[pathPart.value] = variables[index]
+        }
 
         promises.push(this.#buildPath(pageInfo.getPathname(path, pagesWithSameRel, { rel: this.rel, pageBuilder }), {
           pageBuilder,
           variables: {
             allUrlParts: variables,
-            urlParts: Object.values(dynamicVariables)
+            urlParts
           },
           replace: dynamicVariables
         }))

@@ -11,7 +11,7 @@
     "build": "run-s build:**",
     "build:pages": "node ./src/pages.mjs --output dist",
     "build:action": "ncc build action/action.mjs --out action/dist",
-    "watch": "npm run -s build -- --watch",
+    "start": "npm run build:pages -- --watch",
     "test": "npm-run-all -s test:*",
     "test:lint": "eslint **/*.{js,mjs}"
   },
