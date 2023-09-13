@@ -294,6 +294,7 @@ export default class Page {
     const integrityCheckPromises = []
     for (const { id, outerHTML } of dependencies) {
       if (!(outerHTML.includes('integrity='))) continue
+      if (id === this.id) continue
       const page = options.pageBuilder.pages.find((page) => page.id === id)
       if (!page) throw new Error(`Page with id "${id}" does not exist`)
       const build = page.getBuildProgress(options.pageBuilder)
@@ -341,7 +342,7 @@ export default class Page {
       replace(regex, `$1="${urlPath}"`)
 
       // add the integrity hash if it is not already there
-      if (outerHTML.includes('integrity=')) {
+      if (id !== this.id && outerHTML.includes('integrity=')) {
         const algorithm = outerHTML.match(/integrity=["']([^"']*)["']/)[1]
         if (!(algorithm.includes('-'))) {
           const hash = crypto.createHash(algorithm)
