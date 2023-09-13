@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as crypto from 'node:crypto'
 
 import splitByTemplateLiterals from '../utils/splitByTemplateLiterals.mjs'
 import importDynamicModule from '../utils/importDynamicModule.mjs'
@@ -269,7 +270,7 @@ export default class Page {
     // Wait for sub-pages to be build
     for (const id of this.getSubpages()) {
       const page = Page.pages[pageInfo.getId(id)]
-      if (!page) throw new Error(`Page with id ${id} does not exist`)
+      if (!page) throw new Error(`Page with id "${id}" does not exist`)
 
       // add the page to the page builder
       const pageBuilderPage = options.pageBuilder.pages.find((page) => page.id === id)
@@ -288,10 +289,25 @@ export default class Page {
     }
     await Promise.all(subpageBuildPromises)
 
+    // wait for dependencies with integrity checks to be done building
+    // additionally rebuild the page when the dependencies hash changes
+    const integrityCheckPromises = []
+    for (const { id, outerHTML } of dependencies) {
+      if (!(outerHTML.includes('integrity='))) continue
+      const page = options.pageBuilder.pages.find((page) => page.id === id)
+      if (!page) throw new Error(`Page with id "${id}" does not exist`)
+      const build = page.getBuildProgress(options.pageBuilder)
+      integrityCheckPromises.push(build)
+      this.addSource(id)
+    }
+    await Promise.all(integrityCheckPromises)
+
     // replace the dependencies src with the url path
     const variableValues = Object.values(options.variables).flat().filter((v) => typeof v === 'string') || []
     const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    for (const { id, src, outerHTML } of dependencies) {
+    for (const dependency of dependencies) {
+      const { id, src } = dependency
+      let { outerHTML } = dependency
       const urlPaths = Object.entries(options.pageBuilder.urlPaths).filter(([_key, value]) => value === id)
       if (urlPaths.length === 0) throw new Error(`Page with id ${id} has not been build, yet.`)
 
@@ -306,15 +322,58 @@ export default class Page {
         return bCount - aCount
       })[0]
 
-      // securely replace the src, unless the html has been automatically adjusted
-      fileContent = fileContent.replaceAll(outerHTML, outerHTML.replaceAll(src, urlPath))
-      const regex = new RegExp(`(src|href|action|data-src)=["']${escapeRegExp(src)}["']`, 'gi')
-      fileContent = fileContent.replace(regex, `$1="${urlPath}"`)
+      const replace = (...args) => {
+        const newOuterHTML = outerHTML.replace(...args)
+        fileContent = fileContent.replace(outerHTML, newOuterHTML)
+        fileContent = fileContent.replace(...args)
+        outerHTML = newOuterHTML
+      }
 
-      // securely replace the srcset, unless the html has been automatically adjusted
+      // securely replace the outerHTML, unless the html has been automatically adjusted
+      replace(src, urlPath)
       if (outerHTML.includes('srcset')) {
         const regex = new RegExp(`srcset=["']([^"']*)${escapeRegExp(src)}([^"']*)["']`, 'gi')
-        fileContent = fileContent.replace(regex, `srcset="$1${urlPath}$2"`)
+        replace(regex, `srcset="$1${urlPath}$2"`)
+      }
+
+      // replace the src, unless the html has been automatically adjusted
+      const regex = new RegExp(`(src|href|action|data-src)=["']${escapeRegExp(src)}["']`, 'gi')
+      replace(regex, `$1="${urlPath}"`)
+
+      // add the integrity hash if it is not already there
+      if (outerHTML.includes('integrity=')) {
+        const algorithm = outerHTML.match(/integrity=["']([^"']*)["']/)[1]
+        if (!(algorithm.includes('-'))) {
+          const hash = crypto.createHash(algorithm)
+          const content = await fs.promises.readFile(path.resolve(options.pageBuilder.output, ...urlPath.split('/')), { encoding: 'utf-8' })
+          const integrity = (hash.update(content) && hash).digest('base64')
+
+          const outerTags = [
+            ...(fileContent.matchAll(new RegExp(`<[^>]+${urlPath}[^>]+integrity="([^"]*)"`, 'gi')) || []),
+            ...(fileContent.matchAll(new RegExp(`<[^>]+integrity="([^"]*)"[^>]+${urlPath}`, 'gi')) || [])
+          ].map((match) => match[0])
+          for (const outerTag of outerTags) {
+            replace(outerTag, outerTag.replace(/integrity=["']([^"']*)["']/, `integrity="${algorithm}-${integrity}"`))
+          }
+
+          // add the integrity hash to the Content-Security-Policy
+          if (fileContent.match(/Content-Security-Policy/i)) {
+            const directive = outerHTML.trim().startsWith('<script') ? 'script-src' : 'style-src'
+            const policy = `'${algorithm}-${integrity}'`
+            const meta = fileContent.match(/<meta.*?Content-Security-Policy.*?>/i)[0]
+            const csp = meta.match(/content="([^"]*)"/i)[1]
+            const updatedCSP = csp.includes(directive)
+              ? csp.split(';').map(part => {
+                if (!(part.trim().startsWith(directive))) return part
+                if (part.includes("'self'")) return part
+                if (part.includes(policy)) return part
+                return `${part} ${policy}`
+              }).join(';')
+              : `${csp.endsWith(';') ? csp : `${csp};`} ${directive} ${policy};`
+            const updatedMeta = meta.replace(csp, updatedCSP)
+            fileContent = fileContent.replace(meta, updatedMeta)
+          }
+        }
       }
     }
 

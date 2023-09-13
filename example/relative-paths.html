@@ -2,10 +2,10 @@
   <head>
     <meta charset="utf-8">
     <link rel="canonical" href="/" />                         <!-- this will generate /index.html -->
-    <meta http-equiv="Content-Security-Policy" content="${await getContentSecurityPolicy()}">
-    <script src="assets/script.mjs"></script>                 <!-- included using the relative path, instead of the absolute root path -->
-    <link rel="stylesheet" href="assets/tailwind.css" />
-    <link rel="stylesheet" href="assets/style.css" />         <!-- included using the relative path, instead of the absolute root path -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self';">
+    <script integrity="sha256" src="assets/script.mjs"></script>                 <!-- included using the relative path, instead of the absolute root path -->
+    <link integrity="sha256" rel="stylesheet" href="assets/tailwind.css" />
+    <link integrity="sha256" rel="stylesheet" href="assets/style.css" />         <!-- included using the relative path, instead of the absolute root path -->
     <link rel="preflight" href="absolute-paths.html"/>
     <title>Example - Relative File Paths</title>
 
@@ -24,6 +24,7 @@
     <a href="absolute-paths.html">Visit example with absolute paths</a><br>
     <br>
     Build date: ${date}
+    <script integrity="sha256">console.log('The body has been loaded.')</script>
   </body>
 </html>
 
@@ -32,9 +33,4 @@
   import { getDependencies } from '@pascalsalesch/pages'
 
   export const date = (new Date()).toDateString()
-
-  export function getContentSecurityPolicy () {
-    console.log(getDependencies())
-    return "default-src 'self'; script-src 'self'"
-  }
 </script>
