@@ -57,18 +57,20 @@ export async function transformOfCanonical (event) {
     event.content = event.content.replace(outerHTML, tag.outerHTML)
 
     // update the content-security-policy
-    const policy = `'${algorithm}-${integrity}'`
-    const directive = tag.tagName.toUpperCase() === 'SCRIPT' ? 'script-src' : 'style-src'
-    const meta = event.content.match(/<meta[^<]*?Content-Security-Policy.*?>/i)[0]
-    const csp = meta.match(/content="([^"]*)"/i)[1]
-    const updatedCSP = csp.includes(directive)
-      ? csp.split(';').map(part => {
-        if (!(part.trim().startsWith(directive))) return part
-        if (part.includes(policy)) return part
-        return `${part} ${policy}`
-      }).join(';')
-      : `${csp.endsWith(';') ? csp : `${csp};`} ${directive} ${policy};`
-    const updatedMeta = meta.replace(csp, updatedCSP)
-    event.content = event.content.replace(meta, updatedMeta)
+    const meta = event.content.match(/<meta[^<]*?Content-Security-Policy.*?>/i)?.[0]
+    if (meta) {
+      const policy = `'${algorithm}-${integrity}'`
+      const directive = tag.tagName.toUpperCase() === 'SCRIPT' ? 'script-src' : 'style-src'
+      const csp = meta.match(/content="([^"]*)"/i)[1]
+      const updatedCSP = csp.includes(directive)
+        ? csp.split(';').map(part => {
+          if (!(part.trim().startsWith(directive))) return part
+          if (part.includes(policy)) return part
+          return `${part} ${policy}`
+        }).join(';')
+        : `${csp.endsWith(';') ? csp : `${csp};`} ${directive} ${policy};`
+      const updatedMeta = meta.replace(csp, updatedCSP)
+      event.content = event.content.replace(meta, updatedMeta)
+    }
   }
 }

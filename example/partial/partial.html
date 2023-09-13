@@ -8,6 +8,10 @@
 <a href="../assets/text-nested.txt">text-nested</a><br>
 <a href="../assets/${file}">text-nested-var</a>
 
+<script integrity="sha256">
+  console.log('Partial has been loaded.')
+</script>
+
 <script type="module" target="body">
   export const file = 'text-nested-var.txt'
 </script>

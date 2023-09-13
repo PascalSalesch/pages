@@ -357,10 +357,10 @@ export default class Page {
           }
 
           // add the integrity hash to the Content-Security-Policy
-          if (fileContent.match(/Content-Security-Policy/i)) {
+          const meta = fileContent.match(/<meta[^<]*?Content-Security-Policy.*?>/i)?.[0]
+          if (meta) {
             const directive = outerHTML.trim().startsWith('<script') ? 'script-src' : 'style-src'
             const policy = `'${algorithm}-${integrity}'`
-            const meta = fileContent.match(/<meta[^<]*?Content-Security-Policy.*?>/i)[0]
             const csp = meta.match(/content="([^"]*)"/i)[1]
             const updatedCSP = csp.includes(directive)
               ? csp.split(';').map(part => {
