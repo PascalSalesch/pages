@@ -360,7 +360,7 @@ export default class Page {
           if (fileContent.match(/Content-Security-Policy/i)) {
             const directive = outerHTML.trim().startsWith('<script') ? 'script-src' : 'style-src'
             const policy = `'${algorithm}-${integrity}'`
-            const meta = fileContent.match(/<meta.*?Content-Security-Policy.*?>/i)[0]
+            const meta = fileContent.match(/<meta[^<]*?Content-Security-Policy.*?>/i)[0]
             const csp = meta.match(/content="([^"]*)"/i)[1]
             const updatedCSP = csp.includes(directive)
               ? csp.split(';').map(part => {

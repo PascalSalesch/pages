@@ -59,7 +59,7 @@ export async function transformOfCanonical (event) {
     // update the content-security-policy
     const policy = `'${algorithm}-${integrity}'`
     const directive = tag.tagName.toUpperCase() === 'SCRIPT' ? 'script-src' : 'style-src'
-    const meta = event.content.match(/<meta.*?Content-Security-Policy.*?>/i)[0]
+    const meta = event.content.match(/<meta[^<]*?Content-Security-Policy.*?>/i)[0]
     const csp = meta.match(/content="([^"]*)"/i)[1]
     const updatedCSP = csp.includes(directive)
       ? csp.split(';').map(part => {
