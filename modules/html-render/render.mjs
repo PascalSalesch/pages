@@ -3,6 +3,7 @@ import * as path from 'node:path'
 
 import resolve from '../../src/utils/resolve.mjs'
 import importDynamicModule from '../../src/utils/importDynamicModule.mjs'
+import splitByTemplateLiterals from '../../src/utils/splitByTemplateLiterals.mjs'
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 
@@ -153,7 +154,11 @@ async function getRenderData (content, ctx) {
       return ''
     }
 
-    return (typeMatch && targetHeadMatch) ? '' : match
+    if ((typeMatch && targetHeadMatch)) {
+      return ''
+    }
+
+    return match
   })
 
   const variables = ctx.variables
@@ -165,6 +170,12 @@ async function getRenderData (content, ctx) {
       variables: ctx.variables
     }))
   }
+
+  // escape backticks in the content, but not in the variables
+  content = splitByTemplateLiterals(content).reduce((content, part) => {
+    if (part.type === 'static') return content + part.value.replaceAll('`', '\\`')
+    return content + `\${${part.value}}`
+  }, '')
 
   return { content, variables }
 }

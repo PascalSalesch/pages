@@ -25,7 +25,13 @@
     <a href="absolute-paths.html">Visit example with absolute paths</a><br>
     <br>
     Build date: ${date}
-    <script integrity="sha256">console.log('The body has been loaded.')</script>
+    <script integrity="sha256">
+      (() => {
+        const date = (new Date()).toDateString()
+        console.log('The body has been loaded.')
+        console.log(`It is ${date}`)
+      })()
+    </script>
   </body>
 </html>
 
