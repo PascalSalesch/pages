@@ -1,6 +1,6 @@
 {
-  "name": "sale.sh",
-  "short_name": "sale-sh",
+  "name": "pages",
+  "short_name": "pages",
   "icons": [
     {
       "src": "/pages/android-chrome-192x192.png",
