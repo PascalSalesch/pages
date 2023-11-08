@@ -122,7 +122,8 @@ async function include (fileref) {
       for (const { src, id } of container) {
         if (!id) continue
         const urlPaths = Object.values(ctx.pageBuilder.urlPaths).filter((file) => file === id)
-        if (urlPaths.length === 0 || urlPaths.length === 1) newOuterHTML = newOuterHTML.replaceAll(src, id)
+        const hash = src.includes('#') ? `#${src.split('#').pop()}` : ''
+        if (urlPaths.length === 0 || urlPaths.length === 1) newOuterHTML = newOuterHTML.replaceAll(src, id + hash)
       }
 
       renderedContent = renderedContent.replaceAll(outerHTML, newOuterHTML)

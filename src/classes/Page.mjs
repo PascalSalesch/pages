@@ -307,13 +307,16 @@ export default class Page {
     const variableValues = Object.values(options.variables).flat().filter((v) => typeof v === 'string') || []
     const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     for (const dependency of dependencies) {
-      const { id, src } = dependency
-      let { outerHTML } = dependency
+      const { id } = dependency
+      let { src, outerHTML } = dependency
+      src = src.includes('#') ? src.split('#')[0] : src
+
+      // find all url paths that point to the dependency
       const urlPaths = Object.entries(options.pageBuilder.urlPaths).filter(([_key, value]) => value === id)
       if (urlPaths.length === 0) throw new Error(`Page with id ${id} has not been build, yet.`)
 
       // find the path that has more variable values in the url
-      const [urlPath] = urlPaths.sort((a, b) => {
+      const [urlPath] = (urlPaths.sort((a, b) => {
         const aSrc = a[0].includes(src)
         const bSrc = b[0].includes(src)
         if (aSrc && !bSrc) return -1
@@ -321,7 +324,7 @@ export default class Page {
         const aCount = variableValues.map(value => a[0].split(value).length - 1).reduce((current, next) => current + next, 0)
         const bCount = variableValues.map(value => b[0].split(value).length - 1).reduce((current, next) => current + next, 0)
         return bCount - aCount
-      })[0]
+      })[0])
 
       const replace = (...args) => {
         const newOuterHTML = outerHTML.replace(...args)
