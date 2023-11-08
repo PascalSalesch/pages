@@ -1,0 +1,18 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches:
+      - latest
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: pascalsalesch/pages@latest
+      with:
+        sourceToken: ${{ secrets.GITHUB_TOKEN }}
+        targetToken: ${{ secrets.GITHUB_TOKEN }}
+        prefix: pages

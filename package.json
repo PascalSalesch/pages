@@ -1,0 +1,36 @@
+{
+  "name": "@pascalsalesch/pages",
+  "version": "0.0.1",
+  "description": "A build tool and server, designed to simplify the process of building and deploying web pages.",
+  "main": "src/classes/PageBuilder.mjs",
+  "type": "module",
+  "bin": {
+    "pages": "src/pages.mjs"
+  },
+  "scripts": {
+    "build": "run-s build:**",
+    "build:pages": "node --trace-deprecation ./src/pages.mjs --output dist",
+    "build:action": "ncc build action/action.mjs --out action/dist",
+    "start": "npm run build:pages -- --watch",
+    "test": "npm-run-all -s test:*",
+    "test:lint": "eslint **/*.{js,mjs}"
+  },
+  "keywords": [],
+  "author": "Pascal Salesch <pascal.b.salesch@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.1",
+    "eslint": "^8.53.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-n": "^16.2.0",
+    "eslint-plugin-promise": "^6.1.1",
+    "npm-run-all": "^4.1.5"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.1",
+    "@actions/github": "^6.0.0",
+    "jsdom": "^22.1.0",
+    "serve": "^14.2.1"
+  }
+}

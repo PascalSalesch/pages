@@ -1,0 +1,17 @@
+<!-- Example Partial -->
+<p>
+  this file was included by adding
+  <code class="text-xs block font-mono bg-black text-slate-400">\${await include('${__filename}')}</code>
+  to the source code
+</p>
+
+<a href="../assets/text-nested.txt">text-nested</a><br>
+<a href="../assets/${file}">text-nested-var</a>
+
+<script integrity="sha256">
+  console.log('Partial has been loaded.')
+</script>
+
+<script type="module" target="body">
+  export const file = 'text-nested-var.txt'
+</script>

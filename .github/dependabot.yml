@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "npm"
+    directory: "/modules/css-tailwind/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "npm"
+    directory: "/modules/html-render/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "npm"
+    directory: "/modules/manifest-icons/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "npm"
+    directory: "/modules/mjs-rollup/"
+    schedule:
+      interval: "weekly"
