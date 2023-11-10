@@ -46,14 +46,11 @@ export async function transformOfStylesheet (event) {
     if (typeof twConfig === 'string') {
       if (event.pageBuilder.verbose) console.log(`[Page] [css-tailwind] [${name}] Adding source config: ${twConfig}`)
       event.page.addSource(twConfig)
-      const twConfigModule = (await import(twConfig))
-      const twConfigContent = twConfigModule.content || twConfigModule.default?.content
-      const twConfigContentFiles = (Array.isArray(twConfigContent) ? twConfigContent : twConfigContent?.files)
-        .filter(f => typeof f === 'string')
-      const sources = (twConfigContentFiles && (await glob(twConfigContentFiles, { cwd: event.pageBuilder.cwd }))) || []
+      const sources = await getSources(twConfig, event)
       for (const source of sources) {
         if (event.pageBuilder.verbose) console.log(`[Page] [css-tailwind] [${name}] Adding source content: ${source}`)
         event.page.addSource(source)
+        console.log(source)
       }
     } else {
       for (const file of (twConfig.content || [])) {
@@ -64,6 +61,31 @@ export async function transformOfStylesheet (event) {
   }
 
   event.content = css + sourcemap
+}
+
+/**
+ * Retrieves the sources from the tailwind config.
+ * @param {string[]} twConfigContentFiles 
+ * @param {boolean} twConfigContentRelative 
+ * @param {object} event 
+ */
+async function getSources (twConfig, event) {
+  const twConfigModule = (await import(twConfig))
+  const twConfigContent = twConfigModule.content || twConfigModule.default?.content
+  const twConfigContentRelative = typeof twConfigContent === 'object' && twConfigContent.relative
+  const twConfigContentFiles = (Array.isArray(twConfigContent) ? twConfigContent : (twConfigContent?.files || []))
+    .filter(f => typeof f === 'string')
+
+  const twConfigContentFilesFind = twConfigContentFiles.filter(f => !f.startsWith('!'))
+  const twConfigContentFilesIgnore = twConfigContentFiles.filter(f => f.startsWith('!')).map(f => f.slice(1))
+  if (twConfigContentFilesFind.length === 0) return []
+
+  const twRoot = twConfigContentRelative ? path.dirname(twConfig) : event.pageBuilder.cwd
+  const sources = await glob(twConfigContentFilesFind, {
+    cwd: twRoot,
+    ignore: twConfigContentFilesIgnore
+  })
+  return sources.map(s => path.resolve(twRoot, s))
 }
 
 /**
