@@ -50,7 +50,6 @@ export async function transformOfStylesheet (event) {
       for (const source of sources) {
         if (event.pageBuilder.verbose) console.log(`[Page] [css-tailwind] [${name}] Adding source content: ${source}`)
         event.page.addSource(source)
-        console.log(source)
       }
     } else {
       for (const file of (twConfig.content || [])) {
