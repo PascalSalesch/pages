@@ -329,7 +329,6 @@ export default class Page {
       const replace = (...args) => {
         const newOuterHTML = outerHTML.replace(...args)
         fileContent = fileContent.replace(outerHTML, newOuterHTML)
-        fileContent = fileContent.replace(...args)
         outerHTML = newOuterHTML
       }
 
