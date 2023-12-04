@@ -101,6 +101,8 @@ async function include (fileref) {
 
   // render the content
   try {
+    console.log('=====================')
+    console.log(content)
     const renderFunction = new AsyncFunction(...Object.keys(data), Object.keys(variables), `return \`${content}\``)
     let renderedContent = (await renderFunction(...Object.values(data), ...Object.values(variables)))
 

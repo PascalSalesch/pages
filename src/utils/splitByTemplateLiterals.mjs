@@ -39,7 +39,7 @@ export default function splitByTemplateLiterals (str) {
             currentPart = ''
           }
         } else {
-          currentPart = currentPart.slice(0, -1) + current
+          currentPart = currentPart + current
           if (i === str.length - 1) {
             parts.push({ type: 'static', value: currentPart })
             currentPart = ''
