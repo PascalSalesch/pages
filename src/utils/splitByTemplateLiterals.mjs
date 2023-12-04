@@ -10,6 +10,7 @@ export default function splitByTemplateLiterals (str) {
   let isDynamic = false
   let depth = 0
   for (let i = 0; i < str.length; i++) {
+    const previous = i === 0 ? null : str.charAt(i - 1)
     const current = str.charAt(i)
 
     if (isDynamic) {
@@ -31,10 +32,18 @@ export default function splitByTemplateLiterals (str) {
     } else {
       const next = str.charAt(i + 1)
       if (current === '$' && next === '{') {
-        isDynamic = true
-        if (currentPart) {
-          parts.push({ type: 'static', value: currentPart })
-          currentPart = ''
+        if (previous !== '\\') {
+          isDynamic = true
+          if (currentPart) {
+            parts.push({ type: 'static', value: currentPart })
+            currentPart = ''
+          }
+        } else {
+          currentPart = currentPart.slice(0, -1) + current
+          if (i === str.length - 1) {
+            parts.push({ type: 'static', value: currentPart })
+            currentPart = ''
+          }
         }
       } else {
         currentPart = currentPart + current
