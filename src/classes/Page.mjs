@@ -306,75 +306,85 @@ export default class Page {
     // replace the dependencies src with the url path
     const variableValues = Object.values(options.variables).flat().filter((v) => typeof v === 'string') || []
     const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    for (const dependency of dependencies) {
-      const { id } = dependency
-      let { src, outerHTML } = dependency
-      src = src.includes('#') ? src.split('#')[0] : src
+    const uniqueOuterHTML = dependencies.reduce((uniqueOuterHTML, dependency) => {
+      uniqueOuterHTML[dependency.outerHTML] = uniqueOuterHTML[dependency.outerHTML] || []
+      uniqueOuterHTML[dependency.outerHTML].push(dependency)
+      return uniqueOuterHTML
+    }, {})
 
-      // find all url paths that point to the dependency
-      const urlPaths = Object.entries(options.pageBuilder.urlPaths).filter(([_key, value]) => value === id)
-      if (urlPaths.length === 0) throw new Error(`Page with id ${id} has not been build, yet.`)
+    for (const dependencies of Object.values(uniqueOuterHTML)) {
+      let outerHTML = dependencies[0].outerHTML
 
-      // find the path that has more variable values in the url
-      const [urlPath] = (urlPaths.sort((a, b) => {
-        const aSrc = a[0].includes(src)
-        const bSrc = b[0].includes(src)
-        if (aSrc && !bSrc) return -1
-        if (!aSrc && bSrc) return 1
-        const aCount = variableValues.map(value => a[0].split(value).length - 1).reduce((current, next) => current + next, 0)
-        const bCount = variableValues.map(value => b[0].split(value).length - 1).reduce((current, next) => current + next, 0)
-        return bCount - aCount
-      })[0])
+      for (const dependency of dependencies) {
+        const { id } = dependency
+        let { src } = dependency
+        src = src.includes('#') ? src.split('#')[0] : src
 
-      const replace = (...args) => {
-        const newOuterHTML = outerHTML.replace(...args)
-        fileContent = fileContent.replace(outerHTML, newOuterHTML)
-        outerHTML = newOuterHTML
-      }
+        // find all url paths that point to the dependency
+        const urlPaths = Object.entries(options.pageBuilder.urlPaths).filter(([_key, value]) => value === id)
+        if (urlPaths.length === 0) throw new Error(`Page with id ${id} has not been build, yet.`)
 
-      // securely replace the outerHTML, unless the html has been automatically adjusted
-      replace(src, urlPath)
-      if (outerHTML.includes('srcset')) {
-        const regex = new RegExp(`srcset=["']([^"']*)${escapeRegExp(src)}([^"']*)["']`, 'gi')
-        replace(regex, `srcset="$1${urlPath}$2"`)
-      }
+        // find the path that has more variable values in the url
+        const [urlPath] = (urlPaths.sort((a, b) => {
+          const aSrc = a[0].includes(src)
+          const bSrc = b[0].includes(src)
+          if (aSrc && !bSrc) return -1
+          if (!aSrc && bSrc) return 1
+          const aCount = variableValues.map(value => a[0].split(value).length - 1).reduce((current, next) => current + next, 0)
+          const bCount = variableValues.map(value => b[0].split(value).length - 1).reduce((current, next) => current + next, 0)
+          return bCount - aCount
+        })[0])
 
-      // replace the src, unless the html has been automatically adjusted
-      const regex = new RegExp(`(src|href|action|data-src)=["']${escapeRegExp(src)}["']`, 'gi')
-      replace(regex, `$1="${urlPath}"`)
+        const replace = (...args) => {
+          const newOuterHTML = outerHTML.replace(...args)
+          fileContent = fileContent.replace(outerHTML, newOuterHTML)
+          outerHTML = newOuterHTML
+        }
 
-      // add the integrity hash if it is not already there
-      if (id !== this.id && outerHTML.includes('integrity=')) {
-        const algorithm = outerHTML.match(/integrity=["']([^"']*)["']/)[1]
-        if (!(algorithm.includes('-'))) {
-          const hash = crypto.createHash(algorithm)
-          const content = await fs.promises.readFile(path.resolve(options.pageBuilder.output, ...urlPath.split('/')), { encoding: 'utf-8' })
-          const integrity = (hash.update(content) && hash).digest('base64')
+        // securely replace the outerHTML, unless the html has been automatically adjusted
+        replace(src, urlPath)
+        if (outerHTML.includes('srcset')) {
+          const regex = new RegExp(`srcset=["']([^"']*)${escapeRegExp(src)}([^"']*)["']`, 'gi')
+          replace(regex, `srcset="$1${urlPath}$2"`)
+        }
 
-          const outerTags = [
-            ...(fileContent.matchAll(new RegExp(`<[^>]+${urlPath}[^>]+integrity="([^"]*)"`, 'gi')) || []),
-            ...(fileContent.matchAll(new RegExp(`<[^>]+integrity="([^"]*)"[^>]+${urlPath}`, 'gi')) || [])
-          ].map((match) => match[0])
-          for (const outerTag of outerTags) {
-            replace(outerTag, outerTag.replace(/integrity=["']([^"']*)["']/, `integrity="${algorithm}-${integrity}"`))
-          }
+        // replace the src, unless the html has been automatically adjusted
+        const regex = new RegExp(`(src|href|action|data-src)=["']${escapeRegExp(src)}["']`, 'gi')
+        replace(regex, `$1="${urlPath}"`)
 
-          // add the integrity hash to the Content-Security-Policy
-          const meta = fileContent.match(/<meta[^<]*?Content-Security-Policy.*?>/i)?.[0]
-          if (meta) {
-            const directive = outerHTML.trim().startsWith('<script') ? 'script-src' : 'style-src'
-            const policy = `'${algorithm}-${integrity}'`
-            const csp = meta.match(/content="([^"]*)"/i)[1]
-            const updatedCSP = csp.includes(directive)
-              ? csp.split(';').map(part => {
-                if (!(part.trim().startsWith(directive))) return part
-                if (part.includes("'self'")) return part
-                if (part.includes(policy)) return part
-                return `${part} ${policy}`
-              }).join(';')
-              : `${csp.endsWith(';') ? csp : `${csp};`} ${directive} ${policy};`
-            const updatedMeta = meta.replace(csp, updatedCSP)
-            fileContent = fileContent.replace(meta, updatedMeta)
+        // add the integrity hash if it is not already there
+        if (id !== this.id && outerHTML.includes('integrity=')) {
+          const algorithm = outerHTML.match(/integrity=["']([^"']*)["']/)[1]
+          if (!(algorithm.includes('-'))) {
+            const hash = crypto.createHash(algorithm)
+            const content = await fs.promises.readFile(path.resolve(options.pageBuilder.output, ...urlPath.split('/')), { encoding: 'utf-8' })
+            const integrity = (hash.update(content) && hash).digest('base64')
+
+            const outerTags = [
+              ...(fileContent.matchAll(new RegExp(`<[^>]+${urlPath}[^>]+integrity="([^"]*)"`, 'gi')) || []),
+              ...(fileContent.matchAll(new RegExp(`<[^>]+integrity="([^"]*)"[^>]+${urlPath}`, 'gi')) || [])
+            ].map((match) => match[0])
+            for (const outerTag of outerTags) {
+              replace(outerTag, outerTag.replace(/integrity=["']([^"']*)["']/, `integrity="${algorithm}-${integrity}"`))
+            }
+
+            // add the integrity hash to the Content-Security-Policy
+            const meta = fileContent.match(/<meta[^<]*?Content-Security-Policy.*?>/i)?.[0]
+            if (meta) {
+              const directive = outerHTML.trim().startsWith('<script') ? 'script-src' : 'style-src'
+              const policy = `'${algorithm}-${integrity}'`
+              const csp = meta.match(/content="([^"]*)"/i)[1]
+              const updatedCSP = csp.includes(directive)
+                ? csp.split(';').map(part => {
+                  if (!(part.trim().startsWith(directive))) return part
+                  if (part.includes("'self'")) return part
+                  if (part.includes(policy)) return part
+                  return `${part} ${policy}`
+                }).join(';')
+                : `${csp.endsWith(';') ? csp : `${csp};`} ${directive} ${policy};`
+              const updatedMeta = meta.replace(csp, updatedCSP)
+              fileContent = fileContent.replace(meta, updatedMeta)
+            }
           }
         }
       }

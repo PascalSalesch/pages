@@ -225,17 +225,35 @@ export async function getDependenciesOfCanonical (event) {
       }
 
       // determine the outerHTML of the tag
-      const outerContent = (() => {
-        const content = event.content.slice(start)
-        if (content.includes(outerHTML)) return outerHTML
-        if (content.split(src).length >= 2) {
-          const matchPos = content.indexOf(src)
-          const contentStartPos = content.slice(0, matchPos).lastIndexOf('<')
-          const contentEndPos = content.slice(matchPos).indexOf('>') + matchPos + 1
-          return content.slice(contentStartPos, contentEndPos)
-        }
-        throw new Error(`Could not map "${src}" to HTML in:\n${event.content.slice(start)}`)
-      })()
+      const outerContent = event.content.includes(outerHTML)
+        ? outerHTML
+        : ((() => {
+            // this is a best effort to find the outerHTML
+            // it is probably better to fix the formatting of the HTML
+            let content = event.content.slice(start)
+            const matches = []
+            while (content.includes(src)) {
+              const matchPos = content.indexOf(src)
+              const contentStartPos = content.slice(0, matchPos).lastIndexOf('<')
+              const contentEndPos = content.slice(matchPos).indexOf('>') + matchPos + 1
+              const match = content.slice(contentStartPos, contentEndPos)
+              matches.push(match)
+              content = content.slice(contentEndPos)
+            }
+            if (matches.length === 0) throw new Error(`Could not find outerHTML for ${src}`)
+            if (matches.length === 1) return matches[0]
+            const compare = (a, b) => (a && !b) ? -1 : (!a && b) ? 1 : 0
+            const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            return (matches.sort((a, b) => {
+              const attributes = ['href', 'src', 'srcset', 'action', 'data-src']
+              for (const attribute of attributes) {
+                const aHasAttribute = a.match(new RegExp(`${attribute}=["']${escapeRegExp(src)}["']`, 'i'))
+                const bHasAttribute = b.match(new RegExp(`${attribute}=["']${escapeRegExp(src)}["']`, 'i'))
+                if (compare(aHasAttribute, bHasAttribute)) return compare(aHasAttribute, bHasAttribute)
+              }
+              return 0
+            }))[0]
+          })())
 
       const id = getId(src, { cwd: event.cwd || path.dirname(event.page.id), outerHTML: outerContent, urlPaths: event.urlPaths, pageBuilder: event.pageBuilder })
       if (id) {
