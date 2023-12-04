@@ -244,13 +244,16 @@ export async function getDependenciesOfCanonical (event) {
             if (matches.length === 1) return matches[0]
             const compare = (a, b) => (a && !b) ? -1 : (!a && b) ? 1 : 0
             const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            // if a and b are equal, their relative order must be preserved.
+            // since version 10 (or ECMAScript 2019), the specification dictates that Array.prototype.sort is stable.
             return (matches.sort((a, b) => {
               const attributes = ['href', 'src', 'srcset', 'action', 'data-src']
+              const ok = { a: false, b: false }
               for (const attribute of attributes) {
-                const aHasAttribute = a.match(new RegExp(`${attribute}=["']${escapeRegExp(src)}["']`, 'i'))
-                const bHasAttribute = b.match(new RegExp(`${attribute}=["']${escapeRegExp(src)}["']`, 'i'))
-                if (compare(aHasAttribute, bHasAttribute)) return compare(aHasAttribute, bHasAttribute)
+                ok.a = ok.a || a.match(new RegExp(`${attribute}=["']${escapeRegExp(src)}["']`, 'i'))
+                ok.b = ok.b || b.match(new RegExp(`${attribute}=["']${escapeRegExp(src)}["']`, 'i'))
               }
+              if (compare(ok.a, ok.b)) return compare(ok.a, ok.b)
               return 0
             }))[0]
           })())
