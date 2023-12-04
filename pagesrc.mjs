@@ -248,8 +248,9 @@ export async function getDependenciesOfCanonical (event) {
     }
 
     // update the start
-    if (event.content.slice(start).split(srcs[srcs.length - 1]).length >= 2) {
-      start = start + event.content.slice(start).indexOf(srcs[srcs.length - 1])
+    const index = event.content.slice(start).indexOf(outerHTML)
+    if (index !== -1) {
+      start = start + index
     }
   }
 }
