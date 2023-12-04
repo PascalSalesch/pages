@@ -246,7 +246,7 @@ export async function getDependenciesOfCanonical (event) {
       }
 
       // update the start
-      if (event.content.slice(start).split(src).length === 2) {
+      if (event.content.slice(start).split(src).length > 2) {
         start = start + event.content.slice(start).indexOf(src)
       }
     }
