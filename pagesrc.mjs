@@ -184,13 +184,11 @@ export async function getPathnamesOfCanonical (event) {
 export async function getDependenciesOfCanonical (event) {
   // create a dom from the content
   const document = (new JSDOM(event.content)).window.document
-  const tags = [
-    ...document.querySelectorAll('*[src]'),
-    ...document.querySelectorAll('*[srcset]'),
-    ...document.querySelectorAll('*[href]'),
-    ...document.querySelectorAll('*[action]'),
-    ...document.querySelectorAll('*[data-src]')
-  ]
+  const tags = document.querySelectorAll('*[src], *[srcset], *[href], *[action], *[data-src]')
+
+  // when mapping the tag of a document to the position in event.content
+  // the start will help determine the correct position
+  let start = 0
 
   // find the source and its type
   for (const tag of tags) {
@@ -225,13 +223,31 @@ export async function getDependenciesOfCanonical (event) {
         continue
       }
 
-      const id = getId(src, { cwd: event.cwd || path.dirname(event.page.id), outerHTML, urlPaths: event.urlPaths, pageBuilder: event.pageBuilder })
+      // determine the outerHTML of the tag
+      const outerContent = (() => {
+        const content = event.content.slice(start)
+        if (content.includes(outerHTML)) return outerHTML
+        if (content.split(src).length >= 2) {
+          const matchPos = content.indexOf(src)
+          const contentStartPos = content.slice(0, matchPos).lastIndexOf('<')
+          const contentEndPos = content.slice(matchPos).indexOf('>') + matchPos + 1
+          return content.slice(contentStartPos, contentEndPos)
+        }
+        throw new Error(`Could not map "${src}" to HTML in:\n${event.content.slice(start)}`)
+      })()
+
+      const id = getId(src, { cwd: event.cwd || path.dirname(event.page.id), outerHTML: outerContent, urlPaths: event.urlPaths, pageBuilder: event.pageBuilder })
       if (id) {
         const page = {}
         await meta({ page, outerHTML })
-        if (page.rel) event.dependencies.push({ id, rel: page.rel, outerHTML, src })
+        if (page.rel) event.dependencies.push({ id, rel: page.rel, outerHTML: outerContent, src })
       } else {
         throw new Error(`Could not find id for ${src}`)
+      }
+
+      // update the start
+      if (event.content.slice(start).split(src).length === 2) {
+        start = start + event.content.slice(start).indexOf(src)
       }
     }
   }
