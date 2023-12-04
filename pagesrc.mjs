@@ -195,7 +195,8 @@ export async function getDependenciesOfCanonical (event) {
     const outerHTML = tag.outerHTML
     const sources = ['src', 'href', 'action', 'data-src'].map(attr => tag.getAttribute(attr))
     const srcset = tag.getAttribute('srcset') ? tag.getAttribute('srcset').split(',').map(s => s.trim().split(' ')[0]) : []
-    for (const src of [...sources, ...srcset].filter((v, i, a) => v && a.indexOf(v) === i)) {
+    const srcs = [...sources, ...srcset].filter((v, i, a) => v && a.indexOf(v) === i)
+    for (const src of srcs) {
       // skip external urls
       if (src.includes('://')) continue
 
@@ -244,11 +245,11 @@ export async function getDependenciesOfCanonical (event) {
       } else {
         throw new Error(`Could not find id for ${src}`)
       }
+    }
 
-      // update the start
-      if (event.content.slice(start).split(src).length > 2) {
-        start = start + event.content.slice(start).indexOf(src)
-      }
+    // update the start
+    if (event.content.slice(start).split(srcs[srcs.length - 1]).length >= 2) {
+      start = start + event.content.slice(start).indexOf(srcs[srcs.length - 1])
     }
   }
 }
