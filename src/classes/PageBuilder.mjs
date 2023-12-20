@@ -10,6 +10,9 @@ import clean from '../utils/clean.mjs'
 
 import Page from './Page.mjs'
 
+const __filename = url.fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 // asnyc function constructor
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 
@@ -84,7 +87,7 @@ export default class PageBuilder extends events.EventEmitter {
   async #load (options) {
     // apply modules
     if (options.modules) {
-      const modulesFolder = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'modules')
+      const modulesFolder = path.resolve(__dirname, '..', '..', 'modules')
       for (const module of options.modules) {
         if (this.verbose) console.log('[PageBuilder]', 'Loading module', module)
 
