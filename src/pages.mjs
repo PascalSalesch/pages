@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import * as fs from 'node:fs'
+import * as url from 'node:url'
 import * as path from 'node:path'
 
 import PageBuilder from './classes/PageBuilder.mjs'
@@ -35,7 +36,7 @@ async function main (options = {}) {
   ]
   const pagesrcFile = pagesRcFiles.find(file => fs.existsSync(file))
   const pagesrc = {}
-  if (pagesrcFile && options.pagesrcFile !== false) Object.assign(pagesrc, await import(pagesrcFile))
+  if (pagesrcFile && options.pagesrcFile !== false) Object.assign(pagesrc, await import(url.pathToFileURL(pagesrcFile).href))
 
   // parse the config
   const config = Object.assign({ ...defaultPagesRc }, pagesrc.default || {}, { ...pagesrc, default: undefined })

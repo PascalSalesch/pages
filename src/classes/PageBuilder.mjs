@@ -2,6 +2,7 @@ import * as events from 'node:events'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import * as cmd from 'node:child_process'
+import * as url from 'node:url'
 
 import getAllCodeFiles from '../utils/getAllCodeFiles.mjs'
 import { getFormattedPathname } from '../utils/getPageInfo.mjs'
@@ -88,7 +89,7 @@ export default class PageBuilder extends events.EventEmitter {
         if (this.verbose) console.log('[PageBuilder]', 'Loading module', module)
 
         const moduleExports = await (async () => {
-          if (!module.startsWith('@pascalsalesch/pages/modules')) return await import(module)
+          if (!module.startsWith('@pascalsalesch/pages/modules')) return await import(url.pathToFileURL(module).href)
           const modulePath = path.resolve(modulesFolder, ...(module.slice('@pascalsalesch/pages/modules/'.length).split('/')))
           const packageJsonFile = path.resolve(modulePath, 'package.json')
           const install = async (packageJsonFile) => {
@@ -103,11 +104,12 @@ export default class PageBuilder extends events.EventEmitter {
             return packageJson
           }
 
-          if (!(fs.existsSync(packageJsonFile))) return await import(modulePath)
+          if (!(fs.existsSync(packageJsonFile))) return await import(url.pathToFileURL(modulePath).href)
 
           const packageJson = await install(packageJsonFile)
           const main = packageJson.main || 'index.mjs'
-          return await import(path.resolve(modulePath, ...(main.split('/'))))
+          const mainPath = path.resolve(modulePath, ...(main.split('/')))
+          return await import(url.pathToFileURL(mainPath).href)
         })()
 
         for (const [eventName, listener] of Object.entries(moduleExports)) {
