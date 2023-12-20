@@ -21,12 +21,14 @@ export default async function importDynamicModule (js, options = {}) {
   options.dir = options.dir || options.cwd
   options.fileref = options.fileref || options.dir
 
-  const importModuleFile = path.resolve(__dirname, '..', 'import.mjs')
+  const importModuleFile = url.pathToFileURL(path.resolve(__dirname, '..', 'import.mjs')).href
+
   const content = `// Cachebuster : ${Date.now()}\n` + js.replace(/[eimx]{2}port[^\n]+from[^'"]*["'](\.[^'"]+)["']/g, (match, filepath) => {
     const file = resolve(filepath, [options.dir, options.cwd])
-    return match.replace(filepath, `file://${file}?cachebuster=${Date.now()}`)
+    const importUrl = `${url.pathToFileURL(file).href}?cachebuster=${Date.now()}`
+    return match.replace(filepath, importUrl)
   }).replace(/[eimx]{2}port[^\n]+from[^'"]*["'](@pascalsalesch\/pages)["']/g, (match, filepath) => {
-    return match.replace(filepath, `file://${importModuleFile}?${btoa(JSON.stringify({
+    return match.replace(filepath, `${importModuleFile}?${btoa(JSON.stringify({
       cachebuster: Date.now(),
       cwd: options.cwd,
       dir: options.dir,
@@ -35,14 +37,14 @@ export default async function importDynamicModule (js, options = {}) {
     }))}`)
   })
 
-  const importableContent = `data:text/javascript;charset=utf-8,${encodeURIComponent(content)}`
+  const importableContent = `data:text/javascript;base64,${btoa(content)}`
 
   try {
     const module = await import(importableContent)
     return { ...module }
   } catch (err) {
     if (err.stack && err.stack.includes('data:text/javascript')) {
-      const msg = err.message.replace(new RegExp(`file://${importModuleFile}[^'"]*`, 'g'), '@pascalsalesch/pages')
+      const msg = err.message.replace(new RegExp(`${importModuleFile}[^'"]*`, 'g'), '@pascalsalesch/pages')
       const error = msg + err.stack.split('\n').slice(0, 2).join('\n')
         .replace(importableContent, `\n${js.split('\n').map((line, i) => `${i + 2}: ${line}`).join('\n')}\n    at ${options.fileref}`)
       throw new Error(error)

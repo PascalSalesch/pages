@@ -3,7 +3,7 @@ import * as path from 'node:path'
 
 import _resolve from './utils/resolve.mjs'
 
-const dataRaw = (import.meta.url).slice(`file://${url.fileURLToPath(import.meta.url)}?`.length)
+const dataRaw = new URL(import.meta.url).search.slice(1)
 
 /**
  * The parsed raw data.

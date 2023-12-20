@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import * as url from 'node:url'
 import * as path from 'node:path'
 
 import { glob } from 'glob'
@@ -69,6 +70,7 @@ export async function transformOfStylesheet (event) {
  * @param {object} event 
  */
 async function getSources (twConfig, event) {
+  twConfig = path.isAbsolute(twConfig) ? url.pathToFileURL(twConfig).href : twConfig
   const twConfigModule = (await import(twConfig))
   const twConfigContent = twConfigModule.content || twConfigModule.default?.content
   const twConfigContentRelative = typeof twConfigContent === 'object' && twConfigContent.relative
