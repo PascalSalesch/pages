@@ -17,12 +17,12 @@ jobs:
         with:
           registry-url: https://registry.npmjs.org/
       - run: |
-          npm publish || true
+          npm publish --access public || true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - run: |
           npm config set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
           npm config set @pascalsalesch:registry https://npm.pkg.github.com
-          npm publish || true
+          npm publish --access public || true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
