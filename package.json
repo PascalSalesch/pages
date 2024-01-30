@@ -1,6 +1,6 @@
 {
   "name": "@pascalsalesch/pages",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A build tool and server, designed to simplify the process of building and deploying web pages.",
   "main": "src/classes/PageBuilder.mjs",
   "type": "module",
@@ -20,17 +20,17 @@
   "license": "MIT",
   "devDependencies": {
     "@vercel/ncc": "^0.38.1",
-    "eslint": "^8.53.0",
+    "eslint": "^8.56.0",
     "eslint-config-standard": "^17.1.0",
-    "eslint-plugin-import": "^2.29.0",
-    "eslint-plugin-n": "^16.2.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-n": "^16.6.2",
     "eslint-plugin-promise": "^6.1.1",
     "npm-run-all": "^4.1.5"
   },
   "dependencies": {
     "@actions/core": "^1.10.1",
     "@actions/github": "^6.0.0",
-    "jsdom": "^22.1.0",
+    "jsdom": "^24.0.0",
     "serve": "^14.2.1"
   }
 }

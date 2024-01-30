@@ -5,6 +5,6 @@
   "type": "module",
   "dependencies": {
     "html-minifier-terser": "^7.2.0",
-    "jsdom": "^22.1.0"
+    "jsdom": "^24.0.0"
   }
 }
