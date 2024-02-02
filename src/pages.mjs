@@ -38,6 +38,12 @@ async function main (options = {}) {
   const pagesrc = {}
   if (pagesrcFile && options.pagesrcFile !== false) Object.assign(pagesrc, await import(url.pathToFileURL(pagesrcFile).href))
 
+  // execute userland "before" function
+  if (typeof pagesrc.before === 'function') {
+    const pagesrcUserlandConfig = await pagesrc.before()
+    if (pagesrcUserlandConfig) Object.assign(pagesrc, pagesrcUserlandConfig)
+  }
+
   // parse the config
   const config = Object.assign({ ...defaultPagesRc }, pagesrc.default || {}, { ...pagesrc, default: undefined })
   for (const [key, value] of Object.entries(config)) if (typeof value === 'undefined') delete config[key]
@@ -62,6 +68,11 @@ async function main (options = {}) {
   if (config.watch) {
     const watch = (await import('./watch.mjs')).default
     await watch(builder, config)
+  }
+
+  // execute userland "after" function
+  if (typeof pagesrc.after === 'function') {
+    await pagesrc.after()
   }
 
   // return the PageBuilder instance
