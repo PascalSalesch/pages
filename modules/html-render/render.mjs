@@ -137,26 +137,25 @@ async function include (fileref) {
 }
 
 /**
- * Removes the <script target="body"></script> tags from the page and returns their values.
- * Removes the <script target="head"></script> tags without evaluating them.
+ * Removes the <script target="html"></script> tags from the page and returns their values.
+ * Removes the <script target="url"></script> tags without evaluating them.
  * @param {string} content - The content of the page.
  * @returns {Promise<{content:string,variables:object}>} - The content of the page and the values of the <script target="body"></script> tags.
  */
 async function getRenderData (content, ctx) {
-  const regex = /<script([^>]*)>((?:(?!<\/script>)[\s\S])*?)<\/script>/g
+  const regex = /<script([^>]*)>((?:(?!<\/script>)[\s\S])*?)<\/script>/gi
   const scripts = []
 
   content = content.replace(regex, (match, attributes, value) => {
-    const typeMatch = attributes.match(/type=["']module["']/)
-    const targetHeadMatch = attributes.match(/target=["']head["']/)
-    const targetBodyMatch = attributes.match(/target=["']body["']/)
+    const targetUrlMatch = attributes.match(/target=["']url["']/i)
+    const targetHtmlMatch = attributes.match(/target=["']html["']/i)
 
-    if (typeMatch && targetBodyMatch) {
+    if (targetHtmlMatch) {
       scripts.push(value)
       return ''
     }
 
-    if ((typeMatch && targetHeadMatch)) {
+    if ((targetUrlMatch)) {
       return ''
     }
 

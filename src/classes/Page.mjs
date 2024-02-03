@@ -183,7 +183,7 @@ export default class Page {
     })
 
     const isAnyDynamic = !!(pathnames.some(pathname => pathname.find((path) => path.type === 'dynamic')))
-    const values = isAnyDynamic ? (await pageInfo.getHeadValues(this.id, pageBuilder)) : {}
+    const values = isAnyDynamic ? (await pageInfo.getUrlValues(this.id, pageBuilder)) : {}
     const promises = []
     for (const pathname of pathnames) {
       const isDynamic = !!(pathname.find((path) => path.type === 'dynamic'))

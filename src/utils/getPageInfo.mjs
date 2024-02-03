@@ -102,20 +102,19 @@ export function getFormattedPathname (pathname, options = {}) {
 }
 
 /**
- * Get all <script type="module" target="head"></script> tags from the page.
+ * Get all <script target="url"></script> tags from the page.
  * @param {string} file - The absolute path to the page.
  * @param {import('./PageBuilder.mjs').default} pageBuilder - The PageBuilder instance.
- * @returns {object} - The values of the <script type="module" target="head"></script> tags.
+ * @returns {object} - The values of the <script target="url"></script> tags.
  */
-export async function getHeadValues (file, pageBuilder) {
+export async function getUrlValues (file, pageBuilder) {
   const content = await fs.promises.readFile(file, { encoding: 'utf-8' })
-  const regex = /<script([^>]*)>((?:(?!<\/script>)[\s\S])*?)<\/script>/g
+  const regex = /<script([^>]*)>((?:(?!<\/script>)[\s\S])*?)<\/script>/gi
   const scripts = []
   for (const match of content.matchAll(regex)) {
     const attributes = match[1]
-    const typeMatch = attributes.match(/type=["']module["']/)
-    const targetMatch = attributes.match(/target=["']head["']/)
-    if (typeMatch && targetMatch) scripts.push(match[2])
+    const targetUrlMatch = attributes.match(/target=["']url["']/i)
+    if (targetUrlMatch) scripts.push(match[2])
   }
 
   const allValues = {}
