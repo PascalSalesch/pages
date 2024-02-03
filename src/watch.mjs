@@ -8,8 +8,9 @@ import handler from 'serve-handler'
  * Starts a webserver and watches for changes.
  * @param {import('./classes/PageBuilder.mjs').default} pageBuilder - The PageBuilder instance.
  * @param {object} config - The config object.
+ * @param {Function} after - The userland "after" function.
  */
-export default async function watch (pageBuilder, config) {
+export default async function watch (pageBuilder, config, after) {
   const server = http.createServer((...args) => { handler(...args, { public: pageBuilder.output }) })
   server.listen(config.port, () => {
     const port = server.address().port
@@ -60,8 +61,9 @@ export default async function watch (pageBuilder, config) {
   }
 
   // stop watching on exit
-  process.on('SIGINT', () => {
+  process.on('SIGINT', async () => {
     server.close()
     for (const watcher of watchers) watcher.close()
+    if (typeof after === 'function') await after()
   })
 }

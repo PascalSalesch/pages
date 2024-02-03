@@ -67,11 +67,11 @@ async function main (options = {}) {
   // start a webserver and watch for changes if the watch option is set
   if (config.watch) {
     const watch = (await import('./watch.mjs')).default
-    await watch(builder, config)
+    await watch(builder, config, pagesrc.after)
   }
 
   // execute userland "after" function
-  if (typeof pagesrc.after === 'function') {
+  if (!config.watch && typeof pagesrc.after === 'function') {
     await pagesrc.after()
   }
 
