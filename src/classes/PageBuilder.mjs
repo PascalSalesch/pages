@@ -46,6 +46,14 @@ export default class PageBuilder extends events.EventEmitter {
   #loading = false
 
   /**
+   * Waits for the PageBuilder to finish loading.
+   * @type {boolean|Promise}
+   */
+  get loading () {
+    return this.#loading
+  }
+
+  /**
    * Creates an instance of PageBuilder.
    * @param {object} options - Options.
    * @param {string} [options.cwd=process.cwd()] - The current working directory.
@@ -60,6 +68,7 @@ export default class PageBuilder extends events.EventEmitter {
    */
   constructor (options = {}) {
     super()
+    this.options = options
     this.cwd = options.cwd || process.cwd()
     this.output = options.output
     this.verbose = options.verbose || false

@@ -45,7 +45,7 @@ async function main (options = {}) {
   }
 
   // parse the config
-  const config = Object.assign({ ...defaultPagesRc }, pagesrc.default || {}, { ...pagesrc, default: undefined })
+  const config = Object.assign({ ...defaultPagesRc }, pagesrc.default || {}, { ...pagesrc, pagesrcFile, default: undefined })
   for (const [key, value] of Object.entries(config)) if (typeof value === 'undefined') delete config[key]
 
   // override the config with the options

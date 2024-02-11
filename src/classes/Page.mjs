@@ -1,12 +1,16 @@
-import * as fs from 'node:fs'
 import * as path from 'node:path'
-import * as crypto from 'node:crypto'
+import * as url from 'node:url'
+
+import threads from 'node:worker_threads'
+import os from 'node:os'
 
 import splitByTemplateLiterals from '../utils/splitByTemplateLiterals.mjs'
 import importDynamicModule from '../utils/importDynamicModule.mjs'
 import transformUrlParts from '../utils/transformUrlParts.mjs'
-import getContent from '../utils/getContent.mjs'
 import * as pageInfo from '../utils/getPageInfo.mjs'
+
+const __filename = url.fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 /**
  * @typedef {string} reference - A reference to a page. This could be a filepath or the outerHTML of a page embedded in another page.
@@ -184,14 +188,14 @@ export default class Page {
 
     const isAnyDynamic = !!(pathnames.some(pathname => pathname.find((path) => path.type === 'dynamic')))
     const values = isAnyDynamic ? (await pageInfo.getUrlValues(this.id, pageBuilder)) : {}
-    const promises = []
+    const workload = []
     for (const pathname of pathnames) {
       const isDynamic = !!(pathname.find((path) => path.type === 'dynamic'))
       if (!isDynamic) {
         const path = pathname.reduce((path, pathPart) => { return path + pathPart.value }, '')
-        const pathnameInfo = pageInfo.getPathname(path, pagesWithSameRel, { rel: this.rel, pageBuilder })
-        const buildPromise = this.#buildPath(pathnameInfo, { pageBuilder, variables: { allUrlParts: path, urlParts: [] } })
-        promises.push(buildPromise)
+        const urlPath = pageInfo.getPathname(path, pagesWithSameRel, { rel: this.rel, pageBuilder })
+        pageBuilder.urlPaths[urlPath] = this.id
+        workload.push({ urlPath, variables: { allUrlParts: path, urlParts: [] } })
         continue
       }
 
@@ -220,193 +224,116 @@ export default class Page {
           urlParts[pathPart.value] = variables[index]
         }
 
-        promises.push(this.#buildPath(pageInfo.getPathname(path, pagesWithSameRel, { rel: this.rel, pageBuilder }), {
-          pageBuilder,
+        const urlPath = pageInfo.getPathname(path, pagesWithSameRel, { rel: this.rel, pageBuilder })
+        pageBuilder.urlPaths[urlPath] = this.id
+        workload.push({
+          urlPath,
           variables: {
             allUrlParts: variables,
             urlParts
           },
           replace: dynamicVariables
+        })
+      }
+    }
+
+    // lets say one build reserves 20mb of memory and we only want to use 10% of the available memory
+    const maxMemoryUsage = Math.floor(os.totalmem() * 0.1)
+    const workloadPerWorker = Math.floor(maxMemoryUsage / 20e6)
+    const workersRequired = Math.ceil(workload.length / workloadPerWorker)
+
+    // the amount of pages one worker should build in parallel
+    // needs to consider the amount of available memory
+    const maxMemoryUsagePerWorker = Math.floor((os.totalmem() * 0.1) / workersRequired)
+    const workerChunkSize = Math.floor(Math.min(30, Math.floor(maxMemoryUsagePerWorker / 20e6)))
+
+    // if we have more work than workers, we need to split the work into multiple iterations
+    const parallelWorkerAmount = Math.min(os.cpus().length, workersRequired)
+    const iterationsRequired = Math.ceil(workersRequired / parallelWorkerAmount)
+
+    // prepare the data for the workers
+    const pageBuilderData = JSON.parse(JSON.stringify(pageBuilder))
+    const pageData = { id: this.id, rel: this.rel }
+
+    let i = 0
+    while (i < iterationsRequired) {
+      const now = Date.now()
+      const iterationWorkloadStart = i * parallelWorkerAmount * workloadPerWorker
+      const iterationWorkloadEnd = Math.min(workload.length, (i + 1) * parallelWorkerAmount * workloadPerWorker)
+      const iterationWorkloadLength = iterationWorkloadEnd - iterationWorkloadStart
+      const parallelWorkerAmountForIteration = Math.min(parallelWorkerAmount, Math.ceil(iterationWorkloadLength / workloadPerWorker))
+
+      const promises = []
+      for (let j = 0; j < parallelWorkerAmountForIteration; j++) {
+        const worker = new threads.Worker(path.resolve(__dirname, 'PathBuilder.mjs'))
+        const workerWorkload = workload.slice(iterationWorkloadStart + (j * workloadPerWorker), iterationWorkloadStart + ((j + 1) * workloadPerWorker))
+
+        promises.push(new Promise((resolve, reject) => {
+          worker.on('message', async (message) => {
+            if (!message.type) return
+            const response = (data) => worker.postMessage({ type: message.type, [message.type]: data, messageId: message.messageId })
+
+            if (message.type === 'addSource') {
+              for (const source of message.addSource) this.addSource(source)
+              response()
+            }
+
+            if (message.type === 'getOrCreateSubpage') {
+              const page = this.#getOrCreateSubpage(message.getOrCreateSubpage.id, { rel: message.getOrCreateSubpage.rel, cwd: pageBuilder.cwd, pageBuilder })
+              this.addSubpage(page.id)
+              response({ id: page.id })
+            }
+
+            if (message.type === 'waitForSubpages') {
+              for (const id of this.getSubpages()) {
+                const page = Page.pages[pageInfo.getId(id)]
+                if (!page) throw new Error(`Page with id "${id}" does not exist`)
+                const pageBuilderPage = pageBuilder.pages.find((page) => page.id === id)
+                if (!pageBuilderPage) pageBuilder.pages.push(page)
+              }
+              response()
+            }
+
+            if (message.type === 'subpageBuild') {
+              const page = pageBuilder.pages.find((page) => page.id === message.subpageBuild.id)
+              await page.getBuildProgress(pageBuilder)
+              response()
+            }
+
+            if (message.type === 'getUrlPaths') {
+              const id = message.getUrlPaths.id
+              const urlPaths = Object.entries(pageBuilder.urlPaths).filter(([_key, value]) => value === id)
+              if (urlPaths.length === 0) throw new Error(`Page with id "${id}" has not been build, yet.`)
+              response(urlPaths)
+            }
+
+            if (message.type === 'done') {
+              await worker.terminate()
+              resolve()
+            }
+          })
+
+          worker.postMessage({
+            type: 'workload',
+            workload: workerWorkload,
+            chunkSize: workerChunkSize,
+            pageData,
+            pageBuilderData
+          })
         }))
       }
-    }
+      await Promise.all(promises)
 
-    await Promise.all(promises)
-  }
-
-  /**
-   * Builds a path.
-   * @param {string} urlPath - The path to the page.
-   * @param {object} options - Options.
-   * @param {import('./PageBuilder.mjs').default} options.pageBuilder - The PageBuilder instance.
-   * @param {object} options.variables - All static and dynamic path part values.
-   * @param {object} [options.replace={}] - The values to replace in the content.
-   */
-  async #buildPath (urlPath, options = {}) {
-    // add path to page builder
-    options.pageBuilder.urlPaths[urlPath] = this.id
-
-    // get content and sources
-    options.variables = Object.assign(options.variables, options.pageBuilder.getVariables(this))
-    const { content, sources } = await (async () => {
-      const pageBuilderResult = await options.pageBuilder.getContentAndSources(this, { variables: options.variables, replace: options.replace })
-      if (pageBuilderResult.content) return pageBuilderResult
-      return pageInfo.getContentAndSources(this)
-    })()
-
-    // add files that modify the content as dependencies.
-    this.#sources = [...new Set([...this.#sources, ...sources])]
-
-    // Create sub-pages
-    const { dependencies } = await options.pageBuilder.getDependencies(this, { urlPath, content, variables: options.variables })
-    for (const { id, rel } of dependencies) {
-      const page = this.#getOrCreateSubpage(id, { rel, cwd: options.pageBuilder.cwd, pageBuilder: options.pageBuilder })
-      this.addSubpage(page.id)
-    }
-
-    // create the file content
-    let fileContent = dependencies.length ? await getContent(content) : content
-
-    // Wait for sub-pages to be build
-    for (const id of this.getSubpages()) {
-      const page = Page.pages[pageInfo.getId(id)]
-      if (!page) throw new Error(`Page with id "${id}" does not exist`)
-
-      // add the page to the page builder
-      const pageBuilderPage = options.pageBuilder.pages.find((page) => page.id === id)
-      if (!pageBuilderPage) options.pageBuilder.pages.push(page)
-    }
-
-    // wait for the urlPath to be available for all sub-pages.
-    // this works with circular dependencies because `urlPaths` is set before the build is done
-    const subpageBuildPromises = []
-    for (const { id } of dependencies) {
-      const urlPaths = Object.values(options.pageBuilder.urlPaths).find(urlId => urlId === id)
-      if (urlPaths) continue
-      const page = options.pageBuilder.pages.find((page) => page.id === id)
-      const build = page.getBuildProgress(options.pageBuilder)
-      subpageBuildPromises.push(build)
-    }
-    await Promise.all(subpageBuildPromises)
-
-    // wait for dependencies with integrity checks to be done building
-    // additionally rebuild the page when the dependencies hash changes
-    const integrityCheckPromises = []
-    for (const { id, outerHTML } of dependencies) {
-      if (!(outerHTML.includes('integrity='))) continue
-      if (id === this.id) continue
-      const page = options.pageBuilder.pages.find((page) => page.id === id)
-      if (!page) throw new Error(`Page with id "${id}" does not exist`)
-      const build = page.getBuildProgress(options.pageBuilder)
-      integrityCheckPromises.push(build)
-      this.addSource(id)
-    }
-    await Promise.all(integrityCheckPromises)
-
-    // replace the dependencies src with the url path
-    const variableValues = Object.values(options.variables).flat().filter((v) => typeof v === 'string') || []
-    const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const uniqueOuterHTML = dependencies.reduce((uniqueOuterHTML, dependency) => {
-      uniqueOuterHTML[dependency.outerHTML] = uniqueOuterHTML[dependency.outerHTML] || []
-      uniqueOuterHTML[dependency.outerHTML].push(dependency)
-      return uniqueOuterHTML
-    }, {})
-
-    for (const dependencies of Object.values(uniqueOuterHTML)) {
-      let outerHTML = dependencies[0].outerHTML
-
-      for (const dependency of dependencies) {
-        const { id } = dependency
-        let { src } = dependency
-        src = src.includes('#') ? src.split('#')[0] : src
-
-        // find all url paths that point to the dependency
-        const urlPaths = Object.entries(options.pageBuilder.urlPaths).filter(([_key, value]) => value === id)
-        if (urlPaths.length === 0) throw new Error(`Page with id ${id} has not been build, yet.`)
-
-        // find the path that has more variable values in the url
-        const [urlPath] = (urlPaths.sort((a, b) => {
-          const aSrc = a[0].includes(src)
-          const bSrc = b[0].includes(src)
-          if (aSrc && !bSrc) return -1
-          if (!aSrc && bSrc) return 1
-          const aCount = variableValues.map(value => a[0].split(value).length - 1).reduce((current, next) => current + next, 0)
-          const bCount = variableValues.map(value => b[0].split(value).length - 1).reduce((current, next) => current + next, 0)
-          return bCount - aCount
-        })[0])
-
-        const replace = (...args) => {
-          const newOuterHTML = outerHTML.replace(...args)
-          fileContent = fileContent.replace(outerHTML, newOuterHTML)
-          outerHTML = newOuterHTML
-        }
-
-        // securely replace the outerHTML, unless the html has been automatically adjusted
-        replace(src, urlPath)
-        if (outerHTML.includes('srcset')) {
-          const regex = new RegExp(`srcset=["']([^"']*)${escapeRegExp(src)}([^"']*)["']`, 'gi')
-          replace(regex, `srcset="$1${urlPath}$2"`)
-        }
-
-        // replace the src, unless the html has been automatically adjusted
-        const regex = new RegExp(`(src|href|action|data-src)=["']${escapeRegExp(src)}["']`, 'gi')
-        replace(regex, `$1="${urlPath}"`)
-
-        // add the integrity hash if it is not already there
-        if (id !== this.id && outerHTML.includes('integrity=')) {
-          const algorithm = outerHTML.match(/integrity=["']([^"']*)["']/)[1]
-          if (!(algorithm.includes('-'))) {
-            const hash = crypto.createHash(algorithm)
-            const content = await fs.promises.readFile(path.resolve(options.pageBuilder.output, ...urlPath.split('/')), { encoding: 'utf-8' })
-            const integrity = (hash.update(content) && hash).digest('base64')
-
-            const outerTags = [
-              ...(fileContent.matchAll(new RegExp(`<[^>]+${urlPath}[^>]+integrity="([^"]*)"`, 'gi')) || []),
-              ...(fileContent.matchAll(new RegExp(`<[^>]+integrity="([^"]*)"[^>]+${urlPath}`, 'gi')) || [])
-            ].map((match) => match[0])
-            for (const outerTag of outerTags) {
-              replace(outerTag, outerTag.replace(/integrity=["']([^"']*)["']/, `integrity="${algorithm}-${integrity}"`))
-            }
-
-            // add the integrity hash to the Content-Security-Policy
-            const meta = fileContent.match(/<meta[^<]*?Content-Security-Policy.*?>/i)?.[0]
-            if (meta) {
-              const directive = outerHTML.trim().startsWith('<script') ? 'script-src' : 'style-src'
-              const policy = `'${algorithm}-${integrity}'`
-              const csp = meta.match(/content="([^"]*)"/i)[1]
-              const updatedCSP = csp.includes(directive)
-                ? csp.split(';').map(part => {
-                  if (!(part.trim().startsWith(directive))) return part
-                  if (part.includes("'self'")) return part
-                  if (part.includes(policy)) return part
-                  return `${part} ${policy}`
-                }).join(';')
-                : `${csp.endsWith(';') ? csp : `${csp};`} ${directive} ${policy};`
-              const updatedMeta = meta.replace(csp, updatedCSP)
-              fileContent = fileContent.replace(meta, updatedMeta)
-            }
-          }
-        }
+      if (iterationsRequired > 1) {
+        const iterationDuration = Date.now() - now
+        const remainingIterations = iterationsRequired - i - 1
+        const estimatedRemainingTimeMS = remainingIterations * iterationDuration
+        const estimatedRemainingTimeS = Math.round(estimatedRemainingTimeMS / 1000)
+        const estimatedRemainingTime = estimatedRemainingTimeS > 60 ? `${Math.round(estimatedRemainingTimeS / 60)}m` : `${estimatedRemainingTimeS}s`
+        console.log(`[Page] Building ${this.id} (${i + 1}/${iterationsRequired}) - Estimated remaining time: ${estimatedRemainingTime}`)
       }
-    }
 
-    // emit event to modify the content
-    fileContent = await options.pageBuilder.transform(this, { content: fileContent, url: urlPath })
-
-    // write the file
-    const output = path.resolve(options.pageBuilder.output, ...urlPath.split('/'))
-    if (options.pageBuilder.verbose) console.log(`[Page] Writing ${urlPath} to ${output}`)
-    if (!fs.existsSync(path.dirname(output))) await fs.promises.mkdir(path.dirname(output), { recursive: true })
-    if (typeof fileContent === 'string') {
-      await fs.promises.writeFile(output, fileContent, { encoding: 'utf-8' })
-    } else {
-      // write file from ReadableStream
-      const writeStream = fs.createWriteStream(output)
-      fileContent.pipe(writeStream)
-      await new Promise((resolve, reject) => {
-        writeStream.on('finish', resolve)
-        writeStream.on('error', reject)
-      })
+      i++
     }
   }
 }
