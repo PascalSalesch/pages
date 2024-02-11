@@ -25,17 +25,23 @@ threads.parentPort.on('message', async (message) => {
       pagesrc,
       { default: undefined }
     )
+
     const pageBuilder = new PageBuilder(pageBuilderOptions)
     if (pageBuilder.loading) await pageBuilder.loading
-
-    const page = new Page(message.pageData.id)
-    page.rel = message.pageData.rel
-
     for (const property in message.pageBuilderData) {
       if (property === 'options' || property.startsWith('_')) continue
       pageBuilder[property] = message.pageBuilderData[property]
     }
 
+    const page = new Page(message.pageData.id)
+    page.rel = message.pageData.rel
+
+    // execute userland "beforeEach" function
+    if (typeof pagesrc.beforeEachWorker === 'function') {
+      await pagesrc.beforeEachWorker()
+    }
+
+    // execute the workload in chunks
     const chunkSize = message.chunkSize || 20
     for (let i = 0; i < message.workload.length; i += chunkSize) {
       const chunk = message.workload.slice(i, i + chunkSize)
@@ -44,8 +50,7 @@ threads.parentPort.on('message', async (message) => {
         promises.push((async () => {
           // execute userland "beforeEach" function
           if (typeof pagesrc.beforeEach === 'function') {
-            const pagesrcUserlandConfig = await pagesrc.beforeEach()
-            if (pagesrcUserlandConfig) Object.assign(pagesrc, pagesrcUserlandConfig)
+            await pagesrc.beforeEach()
           }
 
           await buildPath.call(page, workload.urlPath, { ...workload, pageBuilder })
@@ -57,6 +62,11 @@ threads.parentPort.on('message', async (message) => {
         })())
       }
       await Promise.all(promises)
+    }
+
+    // execute userland "afterEachWorker" function
+    if (typeof pagesrc.afterEachWorker === 'function') {
+      await pagesrc.afterEachWorker()
     }
 
     threads.parentPort.postMessage({ type: 'done' })
@@ -92,9 +102,16 @@ export default async function buildPath (urlPath, options = {}) {
   // get content and sources
   options.variables = Object.assign(options.variables, options.pageBuilder.getVariables(this))
   const { content, sources } = await (async () => {
-    const pageBuilderResult = await options.pageBuilder.getContentAndSources(this, { variables: options.variables, replace: options.replace })
-    if (pageBuilderResult.content) return pageBuilderResult
-    return pageInfo.getContentAndSources(this)
+    try {
+      const pageBuilderResult = await options.pageBuilder.getContentAndSources(this, { variables: options.variables, replace: options.replace })
+      if (pageBuilderResult.content) return pageBuilderResult
+      return pageInfo.getContentAndSources(this)
+    } catch (err) {
+      options.pageBuilder.urlPaths = await message('updateUrlPaths')
+      const pageBuilderResult = await options.pageBuilder.getContentAndSources(this, { variables: options.variables, replace: options.replace })
+      if (pageBuilderResult.content) return pageBuilderResult
+      return pageInfo.getContentAndSources(this)
+    }
   })()
 
   // add files that modify the content as dependencies.

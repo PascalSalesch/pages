@@ -239,13 +239,13 @@ export default class Page {
 
     // lets say one build reserves 20mb of memory and we only want to use 10% of the available memory
     const maxMemoryUsage = Math.floor(os.totalmem() * 0.1)
-    const workloadPerWorker = Math.floor(maxMemoryUsage / 20e6)
+    const workloadPerWorker = Math.floor(maxMemoryUsage / 50e6)
     const workersRequired = Math.ceil(workload.length / workloadPerWorker)
 
     // the amount of pages one worker should build in parallel
     // needs to consider the amount of available memory
     const maxMemoryUsagePerWorker = Math.floor((os.totalmem() * 0.1) / workersRequired)
-    const workerChunkSize = Math.floor(Math.min(30, Math.floor(maxMemoryUsagePerWorker / 20e6)))
+    const workerChunkSize = Math.min(30, Math.ceil(maxMemoryUsagePerWorker / 50e6))
 
     // if we have more work than workers, we need to split the work into multiple iterations
     const parallelWorkerAmount = Math.min(os.cpus().length, workersRequired)
@@ -272,6 +272,10 @@ export default class Page {
           worker.on('message', async (message) => {
             if (!message.type) return
             const response = (data) => worker.postMessage({ type: message.type, [message.type]: data, messageId: message.messageId })
+
+            if (message.type === 'updateUrlPaths') {
+              response(pageBuilder.urlPaths)
+            }
 
             if (message.type === 'addSource') {
               for (const source of message.addSource) this.addSource(source)
