@@ -242,22 +242,41 @@ export default class Page {
     const workloadPerWorker = Math.floor(maxMemoryUsage / 50e6)
     const workersRequired = Math.ceil(workload.length / workloadPerWorker)
 
+    // if we have more work than workers, we need to split the work into multiple iterations
+    const parallelWorkerAmount = Math.min(os.cpus().length / 2, workersRequired)
+    const iterationsRequired = Math.ceil(workersRequired / parallelWorkerAmount)
+
     // the amount of pages one worker should build in parallel
     // needs to consider the amount of available memory
-    const maxMemoryUsagePerWorker = Math.floor((os.totalmem() * 0.1) / workersRequired)
-    const workerChunkSize = Math.min(30, Math.ceil(maxMemoryUsagePerWorker / 50e6))
-
-    // if we have more work than workers, we need to split the work into multiple iterations
-    const parallelWorkerAmount = Math.min(os.cpus().length, workersRequired)
-    const iterationsRequired = Math.ceil(workersRequired / parallelWorkerAmount)
+    const maxMemoryUsagePerWorker = Math.floor(maxMemoryUsage / parallelWorkerAmount)
+    const workerChunkSize = Math.ceil(maxMemoryUsagePerWorker / 50e6)
 
     // prepare the data for the workers
     const pageBuilderData = JSON.parse(JSON.stringify(pageBuilder))
     const pageData = { id: this.id, rel: this.rel }
 
     let i = 0
+    let iterationStart
+    let iterationEnd
+    const interval = (iterationsRequired > 1)
+      ? setInterval(() => {
+        let estimatedRemainingTime = ''
+        if (iterationStart && iterationEnd) {
+          const iterationDuration = iterationEnd - iterationStart
+          const remainingIterations = iterationsRequired - i
+          const estimatedRemainingTimeMS = remainingIterations * iterationDuration
+          const estimatedRemainingTimeS = Math.round(estimatedRemainingTimeMS / 1000)
+          estimatedRemainingTime = estimatedRemainingTimeS > 60 ? `${Math.round(estimatedRemainingTimeS / 60)}m` : `${estimatedRemainingTimeS}s`
+        }
+        const totalWorkloadDone = i * parallelWorkerAmount * workloadPerWorker
+        const progress = `Progress: ${Math.round((totalWorkloadDone / workload.length) * 100)}%`
+        const memory = `Memory: ${getMemoryUsageInPercent()}%`
+        console.log(`[Page] Building ${this.id} | ${progress} | ${memory} | ${totalWorkloadDone}/${workload.length} | ${estimatedRemainingTime}`)
+      }, 3000)
+      : null
+
     while (i < iterationsRequired) {
-      const now = Date.now()
+      const start = Date.now()
       const iterationWorkloadStart = i * parallelWorkerAmount * workloadPerWorker
       const iterationWorkloadEnd = Math.min(workload.length, (i + 1) * parallelWorkerAmount * workloadPerWorker)
       const iterationWorkloadLength = iterationWorkloadEnd - iterationWorkloadStart
@@ -265,7 +284,8 @@ export default class Page {
 
       const promises = []
       for (let j = 0; j < parallelWorkerAmountForIteration; j++) {
-        const worker = new threads.Worker(path.resolve(__dirname, 'PathBuilder.mjs'))
+        const verbose = pageBuilder.verbose
+        const worker = new threads.Worker(path.resolve(__dirname, 'PathBuilder.mjs'), { stdout: !verbose, stderr: !verbose })
         const workerWorkload = workload.slice(iterationWorkloadStart + (j * workloadPerWorker), iterationWorkloadStart + ((j + 1) * workloadPerWorker))
 
         promises.push(new Promise((resolve, reject) => {
@@ -326,19 +346,14 @@ export default class Page {
           })
         }))
       }
+
       await Promise.all(promises)
-
-      if (iterationsRequired > 1) {
-        const iterationDuration = Date.now() - now
-        const remainingIterations = iterationsRequired - i - 1
-        const estimatedRemainingTimeMS = remainingIterations * iterationDuration
-        const estimatedRemainingTimeS = Math.round(estimatedRemainingTimeMS / 1000)
-        const estimatedRemainingTime = estimatedRemainingTimeS > 60 ? `${Math.round(estimatedRemainingTimeS / 60)}m` : `${estimatedRemainingTimeS}s`
-        console.log(`[Page] Building ${this.id} (${i + 1}/${iterationsRequired}) - Estimated remaining time: ${estimatedRemainingTime}`)
-      }
-
       i++
+      iterationStart = start
+      iterationEnd = Date.now()
     }
+
+    if (interval) clearInterval(interval)
   }
 }
 
@@ -349,4 +364,8 @@ export default class Page {
  */
 function getPageBuilderId (pageBuilder) {
   return pageBuilder.cwd + pageBuilder.output
+}
+
+function getMemoryUsageInPercent () {
+  return Math.round((os.totalmem() - os.freemem()) / os.totalmem() * 100)
 }

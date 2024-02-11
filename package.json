@@ -1,6 +1,6 @@
 {
   "name": "@pascalsalesch/pages",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "A build tool and server, designed to simplify the process of building and deploying web pages.",
   "main": "src/classes/PageBuilder.mjs",
   "type": "module",
