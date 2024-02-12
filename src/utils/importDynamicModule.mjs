@@ -28,13 +28,13 @@ export default async function importDynamicModule (js, options = {}) {
     const importUrl = `${url.pathToFileURL(file).href}?cachebuster=${Date.now()}`
     return match.replace(filepath, importUrl)
   }).replace(/[eimx]{2}port[^\n]+from[^'"]*["'](@pascalsalesch\/pages)["']/g, (match, filepath) => {
-    return match.replace(filepath, `${importModuleFile}?${btoa(JSON.stringify({
+    return match.replace(filepath, `${importModuleFile}?${btoa(encodeURIComponent(JSON.stringify({
       cachebuster: Date.now(),
       cwd: options.cwd,
       dir: options.dir,
       fileref: options.fileref,
       variables: { ...options.variables, include: undefined }
-    }))}`)
+    })))}`)
   })
 
   const importableContent = `data:text/javascript;base64,${btoa(content)}`

@@ -1,4 +1,3 @@
-import * as url from 'node:url'
 import * as path from 'node:path'
 
 import _resolve from './utils/resolve.mjs'
@@ -9,7 +8,7 @@ const dataRaw = new URL(import.meta.url).search.slice(1)
  * The parsed raw data.
  * @type {object}
  */
-export const data = JSON.parse(atob(dataRaw))
+export const data = JSON.parse(decodeURIComponent(atob(dataRaw)))
 
 /**
  * The absolute path to the current module.
