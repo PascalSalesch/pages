@@ -110,6 +110,7 @@ export default class Page {
    */
   addSource (source) {
     if (this.#sources.indexOf(source) === -1) this.#sources.push(source)
+    if (!(threads.isMainThread)) threads.parentPort.postMessage({ type: 'addSource', addSource: [source] })
   }
 
   /**
@@ -119,6 +120,7 @@ export default class Page {
   addSubpage (id) {
     id = pageInfo.getId(id)
     if (id === this.id) return false
+    if (!(threads.isMainThread)) threads.parentPort.postMessage({ type: 'addSubpage', addSubpage: [id] })
     if (!(id in Page.pages)) throw new Error(`Page with id ${id} does not exist`)
     if (this.#subpages.indexOf(id) === -1) {
       this.#subpages.push(id)
@@ -305,6 +307,11 @@ export default class Page {
 
             if (message.type === 'addSource') {
               for (const source of message.addSource) this.addSource(source)
+              response()
+            }
+
+            if (message.type === 'addSubpage') {
+              for (const subpage of message.addSubpage) this.addSubpage(subpage)
               response()
             }
 
