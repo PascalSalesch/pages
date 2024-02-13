@@ -14,11 +14,12 @@ process.nextTick(async () => {
   const output = getCliArgs('output', 'string', { defaultValue: undefined })
   const port = getCliArgs('port', 'string', { defaultValue: undefined })
   const watch = getCliArgs('watch', 'flag', { defaultValue: undefined })
+  const build = getCliArgs('build', 'flag', { defaultValue: true })
   const verbose = getCliArgs('verbose', 'flag', { defaultValue: undefined })
   const prefix = getCliArgs('prefix', 'string', { defaultValue: '' })
   const suffix = getCliArgs('suffix', 'string', { defaultValue: '' })
   const keep = getCliArgs('keep', 'list', { defaultValue: [] })
-  await main({ cwd, output, watch, port, verbose, prefix, suffix, keep })
+  await main({ cwd, build, output, watch, port, verbose, prefix, suffix, keep })
 })
 
 /**
@@ -62,7 +63,7 @@ async function main (options = {}) {
   const builder = new PageBuilder(config)
 
   // build files
-  await builder.build()
+  if (options.build) await builder.build()
 
   // start a webserver and watch for changes if the watch option is set
   if (config.watch) {
