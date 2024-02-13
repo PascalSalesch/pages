@@ -31,6 +31,11 @@ export default class PageBuilder extends events.EventEmitter {
   urlPaths = {}
 
   /**
+   * @type {WorkloadManager} - A workload manager that can prioritize and queue workloads.
+   */
+  workloadManager = new WorkloadManager()
+
+  /**
    * @type {Object<string,AsyncFunction>} - A map of event names to async listeners.
    */
   #asyncListeners = {}
@@ -391,5 +396,38 @@ export default class PageBuilder extends events.EventEmitter {
       }
     }
     return super.emit(eventName, ...args) || this.#asyncListeners[eventName]?.length > 0
+  }
+}
+
+class WorkloadManager {
+  #prioritized = new Set()
+  #isBusy = 0
+
+  prioritize (id) {
+    this.#prioritized.add(id)
+  }
+
+  next (id) {
+    const callback = () => { this.#isBusy = this.#isBusy - 1 }
+    const check = () => {
+      const isPrioritized = this.#prioritized.has(id)
+      if (isPrioritized || this.#isBusy === 0) {
+        this.#isBusy = this.#isBusy + 1
+        return callback
+      }
+    }
+
+    const ready = check()
+    if (ready) return ready
+
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        const ready = check()
+        if (ready) {
+          clearInterval(interval)
+          resolve(callback)
+        }
+      }, 100)
+    })
   }
 }

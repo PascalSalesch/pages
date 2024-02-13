@@ -237,6 +237,8 @@ export default class Page {
       }
     }
 
+    const callback = await pageBuilder.workloadManager.next(this.id)
+
     // lets say one build reserves 20mb of memory and we only want to use 10% of the available memory
     const maxMemoryUsage = Math.floor(os.totalmem() * 0.1)
     const workloadPerWorker = Math.floor(maxMemoryUsage / 50e6)
@@ -258,20 +260,24 @@ export default class Page {
     let i = 0
     let iterationStart
     let iterationEnd
+    const start = Date.now()
     const interval = (iterationsRequired > 1)
       ? setInterval(() => {
-        let estimatedRemainingTime = ''
+        let time = ''
         if (iterationStart && iterationEnd) {
           const iterationDuration = iterationEnd - iterationStart
           const remainingIterations = iterationsRequired - i
           const estimatedRemainingTimeMS = remainingIterations * iterationDuration
-          const estimatedRemainingTimeS = Math.round(estimatedRemainingTimeMS / 1000)
-          estimatedRemainingTime = estimatedRemainingTimeS > 60 ? `${Math.round(estimatedRemainingTimeS / 60)}m` : `${estimatedRemainingTimeS}s`
+          const duration = (Date.now() - start)
+          const done = duration + estimatedRemainingTimeMS
+          time = estimatedRemainingTimeMS > 60000
+            ? `${Math.round(duration / 1000 / 60)}min/${Math.round(done / 1000 / 60)}min`
+            : `${Math.round(duration / 1000)}s/${Math.round(done / 1000)}s`
         }
         const totalWorkloadDone = i * parallelWorkerAmount * workloadPerWorker
         const progress = `Progress: ${Math.round((totalWorkloadDone / workload.length) * 100)}%`
         const memory = `Memory: ${getMemoryUsageInPercent()}%`
-        console.log(`[Page] Building ${this.id} | ${progress} | ${memory} | ${totalWorkloadDone}/${workload.length} | ${estimatedRemainingTime}`)
+        console.log(`[Page] Building ${this.id} | ${progress} | ${memory} | ${totalWorkloadDone}/${workload.length} | ${time}`)
       }, 3000)
       : null
 
@@ -304,12 +310,14 @@ export default class Page {
 
             if (message.type === 'getOrCreateSubpage') {
               const page = this.#getOrCreateSubpage(message.getOrCreateSubpage.id, { rel: message.getOrCreateSubpage.rel, cwd: pageBuilder.cwd, pageBuilder })
+              pageBuilder.workloadManager.prioritize(page.id)
               this.addSubpage(page.id)
               response({ id: page.id })
             }
 
             if (message.type === 'waitForSubpages') {
               for (const id of this.getSubpages()) {
+                pageBuilder.workloadManager.prioritize(id)
                 const page = Page.pages[pageInfo.getId(id)]
                 if (!page) throw new Error(`Page with id "${id}" does not exist`)
                 const pageBuilderPage = pageBuilder.pages.find((page) => page.id === id)
@@ -354,6 +362,7 @@ export default class Page {
     }
 
     if (interval) clearInterval(interval)
+    callback()
   }
 }
 
