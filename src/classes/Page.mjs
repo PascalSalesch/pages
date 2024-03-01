@@ -159,8 +159,6 @@ export default class Page {
    * @param {import('./PageBuilder.mjs').default} pageBuilder - The PageBuilder instance.
    */
   build (pageBuilder) {
-    const progress = this.#buildPromise[getPageBuilderId(pageBuilder)]
-    if (progress) return progress
     this.#buildPromise[getPageBuilderId(pageBuilder)] = this.#build(pageBuilder)
     return this.#buildPromise[getPageBuilderId(pageBuilder)]
   }

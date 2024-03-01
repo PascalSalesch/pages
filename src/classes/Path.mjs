@@ -92,7 +92,7 @@ export default class Path {
 
             const percent = parseInt((this.#workloadLength - this.#workload.length) / this.#workloadLength * 100)
             const total = `${this.#workloadLength - this.#workload.length}/${this.#workloadLength}`
-            if (verbose || 1) console.log(`[Page] ${this.#pageData.id} | ${percent}% | ${total} | ${workload.urlPath}`)
+            if (verbose) console.log(`[Page] ${this.#pageData.id} | ${percent}% | ${total} | ${workload.urlPath}`)
 
             worker.off('message', done)
             resolve()
