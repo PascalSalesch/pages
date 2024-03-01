@@ -198,7 +198,7 @@ export async function getDependenciesOfCanonical (event) {
     const srcs = [...sources, ...srcset].filter((v, i, a) => v && a.indexOf(v) === i)
     for (const src of srcs) {
       // skip external urls
-      if (src.includes('://') || src.match(/^[a-zA-Z]+:/)) continue
+      if (src.includes('://') || src.match(/^[a-zA-Z]+:/) || src.startsWith('#')) continue
 
       // known Dependencies should use their rel value
       const dependencyList = [
