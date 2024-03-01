@@ -204,8 +204,9 @@ export function getId (ref, options = {}) {
   }
 
   if (ref.includes('#')) return getId(ref.split('#')[0], options)
+  if (ref.includes('?')) return getId(ref.split('?')[0], options)
 
   // if the ref is not an absolute path, a relative path or a reference, throw an error
   if (options.throwError === false) return null
-  throw new Error(`Could not find page with reference ${ref}${options.outerHTML ? ` in ${options.outerHTML}` : ''}`)
+  throw new Error(`Could not find page with reference "${ref}"${options.outerHTML ? ` in ${options.outerHTML}` : ''}`)
 }

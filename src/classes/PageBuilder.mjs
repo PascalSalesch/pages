@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import * as fs from 'node:fs'
 import * as cmd from 'node:child_process'
 import * as url from 'node:url'
+import threads from 'node:worker_threads'
 
 import getAllCodeFiles from '../utils/getAllCodeFiles.mjs'
 import { getFormattedPathname } from '../utils/getPageInfo.mjs'
@@ -112,6 +113,7 @@ export default class PageBuilder extends events.EventEmitter {
           const install = async (packageJsonFile) => {
             if (!(fs.existsSync(packageJsonFile))) return {}
             const packageJson = JSON.parse(fs.readFileSync(packageJsonFile, { encoding: 'utf-8' }))
+            if (!threads.isMainThread) return packageJson
 
             if (fs.existsSync(path.resolve(path.dirname(packageJsonFile), 'node_modules'))) return packageJson
             if (Object.keys(packageJson.dependencies || {}).length > 0) {
@@ -403,6 +405,10 @@ class WorkloadManager {
   #prioritized = new Set()
   #isBusy = 0
 
+  getBusyness () {
+    return this.#isBusy
+  }
+
   prioritize (id) {
     this.#prioritized.add(id)
   }
@@ -427,7 +433,7 @@ class WorkloadManager {
           clearInterval(interval)
           resolve(callback)
         }
-      }, 100)
+      }, 300)
     })
   }
 }

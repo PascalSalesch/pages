@@ -15,70 +15,75 @@ const __dirname = path.dirname(__filename)
 
 let messageNum = 0
 
+let pageBuilder
+let page
+
 threads.parentPort.on('message', async (message) => {
   if (!message.type) return
-  if (message.type === 'workload' && message.workload) {
-    const pagesrc = await import(url.pathToFileURL(message.pageBuilderData.options.pagesrcFile).href)
+
+  if (message.type === 'init' && message.init) {
+    if (pageBuilder) return threads.parentPort.postMessage({ type: 'error', error: 'PageBuilder already initialized.' })
+    if (page) return threads.parentPort.postMessage({ type: 'error', error: 'Page already initialized.' })
+
+    const { pageBuilderData, pageData } = message.init
+    const pagesrc = await import(url.pathToFileURL(pageBuilderData.options.pagesrcFile).href)
     const pageBuilderOptions = Object.assign(
-      message.pageBuilderData.options,
+      pageBuilderData.options,
       await import(url.pathToFileURL(path.resolve(__dirname, '..', '..', 'pagesrc.mjs')).href),
       pagesrc,
       { default: undefined }
     )
+    if (pageBuilderData.options.verbose) pageBuilderOptions.verbose = true
 
-    const pageBuilder = new PageBuilder(pageBuilderOptions)
+    pageBuilder = new PageBuilder(pageBuilderOptions)
     if (pageBuilder.loading) await pageBuilder.loading
-    for (const property in message.pageBuilderData) {
+    for (const property in pageBuilderData) {
       if (property === 'options' || property.startsWith('_')) continue
-      pageBuilder[property] = message.pageBuilderData[property]
+      pageBuilder[property] = pageBuilderData[property]
     }
 
-    const page = new Page(message.pageData.id)
-    page.rel = message.pageData.rel
+    page = new Page(pageData.id)
+    page.rel = pageData.rel
 
     // execute userland "beforeEach" function
     if (typeof pagesrc.beforeEachWorker === 'function') {
       await pagesrc.beforeEachWorker()
     }
 
-    // execute the workload in chunks
-    const chunkSize = message.chunkSize || 20
-    for (let i = 0; i < message.workload.length; i += chunkSize) {
-      const chunk = message.workload.slice(i, i + chunkSize)
-      const promises = []
-      for (const workload of chunk) {
-        promises.push((async () => {
-          // execute userland "beforeEach" function
-          if (typeof pagesrc.beforeEach === 'function') {
-            await pagesrc.beforeEach()
-          }
+    // listen for messages
+    threads.parentPort.on('message', async (message) => {
+      if (!message.type) return
 
-          await buildPath.call(page, workload.urlPath, { ...workload, pageBuilder })
-
-          // execute userland "afterEach" function
-          if (typeof pagesrc.afterEach === 'function') {
-            await pagesrc.afterEach()
-          }
-        })())
+      if (message.type === 'memoryUsage') {
+        const { heapUsed } = process.memoryUsage()
+        threads.parentPort.postMessage({ type: 'memoryUsage', memoryUsage: heapUsed })
       }
-      await Promise.all(promises)
-    }
 
-    // execute userland "afterEachWorker" function
-    if (typeof pagesrc.afterEachWorker === 'function') {
-      await pagesrc.afterEachWorker()
-    }
+      if (message.type === 'build') {
+        const options = message.build
+        if (typeof pagesrc.beforeEach === 'function') await pagesrc.beforeEach()
+        await buildPath.call(page, options.urlPath, { ...options, pageBuilder })
+        if (typeof pagesrc.afterEach === 'function') await pagesrc.afterEach()
+        threads.parentPort.postMessage({ type: 'build', build: options })
+      }
+    })
 
-    threads.parentPort.postMessage({ type: 'done' })
+    threads.parentPort.postMessage({ type: 'ready' })
   }
 })
 
+/**
+ * Sends a message to the parent thread and waits for a response.
+ * @param {string} type - The type of message.
+ * @param {any} data - The data to send.
+ * @returns {Promise<any>} - The response.
+ */
 function message (type, data) {
   return new Promise((resolve) => {
     messageNum = messageNum + 1
     const messageId = messageNum
     const cb = (message) => {
-      if (message.messageId === messageId) {
+      if (message?.messageId === messageId) {
         threads.parentPort.off('message', cb)
         resolve(message[type])
       }
@@ -96,21 +101,25 @@ function message (type, data) {
  * @param {object} options.variables - All static and dynamic path part values.
  * @param {object} [options.replace={}] - The values to replace in the content.
  */
-export default async function buildPath (urlPath, options = {}) {
-  if (options.pageBuilder.verbose) console.log(`[Page] Building ${urlPath} from ${this.id}`)
+async function buildPath (urlPath, options = {}) {
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Building ${urlPath}`)
+  const interval = (options.pageBuilder.verbose) ? setInterval(() => console.log(`[Path] ${this.id} | ${urlPath} is still building`), 20000) : null
 
   // get content and sources
   options.variables = Object.assign(options.variables, options.pageBuilder.getVariables(this))
   const { content, sources } = await (async () => {
-    try {
-      const pageBuilderResult = await options.pageBuilder.getContentAndSources(this, { variables: options.variables, replace: options.replace })
-      if (pageBuilderResult.content) return pageBuilderResult
-      return pageInfo.getContentAndSources(this)
-    } catch (err) {
-      options.pageBuilder.urlPaths = await message('updateUrlPaths')
-      const pageBuilderResult = await options.pageBuilder.getContentAndSources(this, { variables: options.variables, replace: options.replace })
-      if (pageBuilderResult.content) return pageBuilderResult
-      return pageInfo.getContentAndSources(this)
+    while (true) {
+      try {
+        const pageBuilderResult = await options.pageBuilder.getContentAndSources(this, { variables: options.variables, replace: options.replace })
+        if (pageBuilderResult.content) return pageBuilderResult
+        return pageInfo.getContentAndSources(this)
+      } catch (err) {
+        if (err.message.startsWith('Could not find page with reference "')) {
+          const reference = err.message.split('"')[1]
+          const urlPath = await message('updateUrlPaths', reference)
+          options.pageBuilder.urlPaths = Object.assign(options.pageBuilder.urlPaths, urlPath)
+        } else throw err
+      }
     }
   })()
 
@@ -137,20 +146,28 @@ export default async function buildPath (urlPath, options = {}) {
     if (urlPaths) continue
     subpageBuildPromises.push(message('subpageBuild', { id }))
   }
-  await Promise.all(subpageBuildPromises)
+  if (subpageBuildPromises.length) await Promise.all(subpageBuildPromises)
 
-  if (options.pageBuilder.verbose) console.log(`[Page] Subpages of ${urlPath} are ready from ${this.id}`)
+  if (options.pageBuilder.verbose) {
+    console.log(`[Path] ${this.id} | Subpages of ${urlPath} are ready`)
+  }
 
   // wait for dependencies with integrity checks to be done building
   // additionally rebuild the page when the dependencies hash changes
   const integrityCheckPromises = []
   for (const { id, outerHTML } of dependencies) {
+    if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Checking integrity of ${id}`)
     if (!(outerHTML.includes('integrity='))) continue
     if (id === this.id) continue
+    if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Add subpage ${id}`)
     integrityCheckPromises.push(message('subpageBuild', { id }))
+    if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Add subpage ${id} (2)`)
     await message('addSource', [id])
+    if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Add source ${id}`)
   }
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${integrityCheckPromises.length} Sources are added to ${urlPath}`)
   await Promise.all(integrityCheckPromises)
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Integrity checks of ${urlPath} are done`)
 
   // replace the dependencies src with the url path
   const variableValues = Object.values(options.variables).flat().filter((v) => typeof v === 'string') || []
@@ -241,13 +258,14 @@ export default async function buildPath (urlPath, options = {}) {
       }
     }
   }
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Replaced dependencies of ${urlPath}`)
 
   // // emit event to modify the content
   fileContent = await options.pageBuilder.transform(this, { content: fileContent, url: urlPath })
 
   // write the file
   const output = path.resolve(options.pageBuilder.output, ...urlPath.split('/'))
-  if (options.pageBuilder.verbose) console.log(`[Page] Writing ${urlPath} to ${output}`)
+  if (options.pageBuilder.verbose) console.log(`[Path] Writing ${urlPath} to ${output}`)
   if (!fs.existsSync(path.dirname(output))) await fs.promises.mkdir(path.dirname(output), { recursive: true })
   if (typeof fileContent === 'string') {
     await fs.promises.writeFile(output, fileContent, { encoding: 'utf-8' })
@@ -260,4 +278,6 @@ export default async function buildPath (urlPath, options = {}) {
       writeStream.on('error', reject)
     })
   }
+
+  if (interval) clearInterval(interval)
 }

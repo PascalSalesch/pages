@@ -1,16 +1,13 @@
 import * as path from 'node:path'
-import * as url from 'node:url'
 
 import threads from 'node:worker_threads'
-import os from 'node:os'
+
+import Path from './Path.mjs'
 
 import splitByTemplateLiterals from '../utils/splitByTemplateLiterals.mjs'
 import importDynamicModule from '../utils/importDynamicModule.mjs'
 import transformUrlParts from '../utils/transformUrlParts.mjs'
 import * as pageInfo from '../utils/getPageInfo.mjs'
-
-const __filename = url.fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
 
 /**
  * @typedef {string} reference - A reference to a page. This could be a filepath or the outerHTML of a page embedded in another page.
@@ -80,7 +77,7 @@ export default class Page {
    * @param {import('./PageBuilder.mjs').default} [options.pageBuilder] - The PageBuilder instance.
    * @returns {Page} - The dependency.
    */
-  #getOrCreateSubpage (id, options = {}) {
+  getOrCreateSubpage (id, options = {}) {
     id = pageInfo.getId(id, { cwd: path.dirname(this.id), pageBuilder: options.pageBuilder })
 
     const page = Page.pages[id]
@@ -162,6 +159,8 @@ export default class Page {
    * @param {import('./PageBuilder.mjs').default} pageBuilder - The PageBuilder instance.
    */
   build (pageBuilder) {
+    const progress = this.#buildPromise[getPageBuilderId(pageBuilder)]
+    if (progress) return progress
     this.#buildPromise[getPageBuilderId(pageBuilder)] = this.#build(pageBuilder)
     return this.#buildPromise[getPageBuilderId(pageBuilder)]
   }
@@ -171,6 +170,8 @@ export default class Page {
    * @param {import('./PageBuilder.mjs').default} pageBuilder - The PageBuilder instance.
    */
   async #build (pageBuilder) {
+    if (!(threads.isMainThread)) return
+
     const pagesWithSameRel = pageBuilder.pages.filter(page => page.rel === this.rel).map(page => page.id)
     const pathnamesList = (await pageBuilder.getPathnames(this) || [pageInfo.getPathname(this.id, pagesWithSameRel, { pageBuilder })])
       .concat(this.#pathnamesHistory)
@@ -241,134 +242,13 @@ export default class Page {
 
     const callback = await pageBuilder.workloadManager.next(this.id)
 
-    // lets say one build reserves 20mb of memory and we only want to use 10% of the available memory
-    const maxMemoryUsage = Math.floor(os.totalmem() * 0.1)
-    const workloadPerWorker = Math.floor(maxMemoryUsage / 50e6)
-    const workersRequired = Math.ceil(workload.length / workloadPerWorker)
-
-    // if we have more work than workers, we need to split the work into multiple iterations
-    const parallelWorkerAmount = Math.min(os.cpus().length / 2, workersRequired)
-    const iterationsRequired = Math.ceil(workersRequired / parallelWorkerAmount)
-
-    // the amount of pages one worker should build in parallel
-    // needs to consider the amount of available memory
-    const maxMemoryUsagePerWorker = Math.floor(maxMemoryUsage / parallelWorkerAmount)
-    const workerChunkSize = Math.ceil(maxMemoryUsagePerWorker / 50e6)
-
     // prepare the data for the workers
     const pageBuilderData = JSON.parse(JSON.stringify(pageBuilder))
     const pageData = { id: this.id, rel: this.rel }
+    const pagePath = new Path({ workload, pageBuilder, pageBuilderData, page: this, pageData })
 
-    let i = 0
-    let iterationStart
-    let iterationEnd
-    const start = Date.now()
-    const interval = (iterationsRequired > 1)
-      ? setInterval(() => {
-        let time = ''
-        if (iterationStart && iterationEnd) {
-          const iterationDuration = iterationEnd - iterationStart
-          const remainingIterations = iterationsRequired - i
-          const estimatedRemainingTimeMS = remainingIterations * iterationDuration
-          const duration = (Date.now() - start)
-          const done = duration + estimatedRemainingTimeMS
-          time = estimatedRemainingTimeMS > 60000
-            ? `${Math.round(duration / 1000 / 60)}min/${Math.round(done / 1000 / 60)}min`
-            : `${Math.round(duration / 1000)}s/${Math.round(done / 1000)}s`
-        }
-        const totalWorkloadDone = i * parallelWorkerAmount * workloadPerWorker
-        const progress = `Progress: ${Math.round((totalWorkloadDone / workload.length) * 100)}%`
-        const memory = `Memory: ${getMemoryUsageInPercent()}%`
-        console.log(`[Page] Building ${this.id} | ${progress} | ${memory} | ${totalWorkloadDone}/${workload.length} | ${time}`)
-      }, 3000)
-      : null
-
-    while (i < iterationsRequired) {
-      const start = Date.now()
-      const iterationWorkloadStart = i * parallelWorkerAmount * workloadPerWorker
-      const iterationWorkloadEnd = Math.min(workload.length, (i + 1) * parallelWorkerAmount * workloadPerWorker)
-      const iterationWorkloadLength = iterationWorkloadEnd - iterationWorkloadStart
-      const parallelWorkerAmountForIteration = Math.min(parallelWorkerAmount, Math.ceil(iterationWorkloadLength / workloadPerWorker))
-
-      const promises = []
-      for (let j = 0; j < parallelWorkerAmountForIteration; j++) {
-        const verbose = pageBuilder.verbose
-        const worker = new threads.Worker(path.resolve(__dirname, 'PathBuilder.mjs'), { stdout: !verbose, stderr: !verbose })
-        const workerWorkload = workload.slice(iterationWorkloadStart + (j * workloadPerWorker), iterationWorkloadStart + ((j + 1) * workloadPerWorker))
-
-        promises.push(new Promise((resolve, reject) => {
-          worker.on('message', async (message) => {
-            if (!message.type) return
-            const response = (data) => worker.postMessage({ type: message.type, [message.type]: data, messageId: message.messageId })
-
-            if (message.type === 'updateUrlPaths') {
-              response(pageBuilder.urlPaths)
-            }
-
-            if (message.type === 'addSource') {
-              for (const source of message.addSource) this.addSource(source)
-              response()
-            }
-
-            if (message.type === 'addSubpage') {
-              for (const subpage of message.addSubpage) this.addSubpage(subpage)
-              response()
-            }
-
-            if (message.type === 'getOrCreateSubpage') {
-              const page = this.#getOrCreateSubpage(message.getOrCreateSubpage.id, { rel: message.getOrCreateSubpage.rel, cwd: pageBuilder.cwd, pageBuilder })
-              pageBuilder.workloadManager.prioritize(page.id)
-              this.addSubpage(page.id)
-              response({ id: page.id })
-            }
-
-            if (message.type === 'waitForSubpages') {
-              for (const id of this.getSubpages()) {
-                pageBuilder.workloadManager.prioritize(id)
-                const page = Page.pages[pageInfo.getId(id)]
-                if (!page) throw new Error(`Page with id "${id}" does not exist`)
-                const pageBuilderPage = pageBuilder.pages.find((page) => page.id === id)
-                if (!pageBuilderPage) pageBuilder.pages.push(page)
-              }
-              response()
-            }
-
-            if (message.type === 'subpageBuild') {
-              const page = pageBuilder.pages.find((page) => page.id === message.subpageBuild.id)
-              await page.getBuildProgress(pageBuilder)
-              response()
-            }
-
-            if (message.type === 'getUrlPaths') {
-              const id = message.getUrlPaths.id
-              const urlPaths = Object.entries(pageBuilder.urlPaths).filter(([_key, value]) => value === id)
-              if (urlPaths.length === 0) throw new Error(`Page with id "${id}" has not been build, yet.`)
-              response(urlPaths)
-            }
-
-            if (message.type === 'done') {
-              await worker.terminate()
-              resolve()
-            }
-          })
-
-          worker.postMessage({
-            type: 'workload',
-            workload: workerWorkload,
-            chunkSize: workerChunkSize,
-            pageData,
-            pageBuilderData
-          })
-        }))
-      }
-
-      await Promise.all(promises)
-      i++
-      iterationStart = start
-      iterationEnd = Date.now()
-    }
-
-    if (interval) clearInterval(interval)
+    // build the page
+    await pagePath.build()
     callback()
   }
 }
@@ -380,8 +260,4 @@ export default class Page {
  */
 function getPageBuilderId (pageBuilder) {
   return pageBuilder.cwd + pageBuilder.output
-}
-
-function getMemoryUsageInPercent () {
-  return Math.round((os.totalmem() - os.freemem()) / os.totalmem() * 100)
 }
