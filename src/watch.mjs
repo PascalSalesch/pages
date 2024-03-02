@@ -1,4 +1,5 @@
 import * as http from 'node:http'
+import * as https from 'node:https'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 
@@ -11,10 +12,15 @@ import handler from 'serve-handler'
  * @param {Function} after - The userland "after" function.
  */
 export default async function watch (pageBuilder, config, after) {
-  const server = http.createServer((...args) => { handler(...args, { public: pageBuilder.output }) })
-  server.listen(config.port, () => {
+  const protocol = config.cert && config.key ? 'https' : 'http'
+  const callback = (...args) => { handler(...args, { public: pageBuilder.output }) }
+  const server = protocol === 'http'
+    ? http.createServer(callback)
+    : https.createServer({ key: fs.readFileSync(config.key), cert: fs.readFileSync(config.cert) }, callback)
+
+  server.listen(config.port, config.host, () => {
     const port = server.address().port
-    console.log(`Server running at http://localhost:${port}`)
+    console.log(`Server running at ${protocol}://${config.host}:${port}`)
   })
 
   // watch for changes

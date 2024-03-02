@@ -22,6 +22,21 @@ export const output = path.resolve(os.tmpdir(), `pages-${(new Date()).toISOStrin
 export const port = 8080
 
 /**
+ * @type {string} - The host to use for the dev server.
+ */
+export const host = 'localhost'
+
+/**
+ * @type {string} - The key to use for the dev server.
+ */
+export const key = null
+
+/**
+ * @type {string} - The cert to use for the dev server.
+ */
+export const cert = null
+
+/**
  * @type {string} - The prefix to use for all paths. The prefix affects the build location and the HTML of the pages.
  */
 export const prefix = '/'
