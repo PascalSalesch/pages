@@ -7,6 +7,8 @@ import { JSDOM } from 'jsdom'
 
 import { getId } from './src/utils/getPageInfo.mjs'
 
+const document = (new JSDOM('<html><head></head><body></body></html>')).window.document
+
 /**
  * @fileoverview This file exports all overwritable functionality of the pages module.
  */
@@ -179,6 +181,7 @@ export async function getPathnamesOfCanonical (event) {
       const pathname = line.match(/<link[^>]+href=['"]([^'"]+)['"]/i)[1]
       event.pathnames.push(pathname)
     }
+    if (line.match(/<\/head>/i)) break
   }
   stream.close()
 
@@ -198,8 +201,9 @@ export async function getPathnamesOfCanonical (event) {
  */
 export async function getDependenciesOfCanonical (event) {
   // create a dom from the content
-  const document = (new JSDOM(event.content)).window.document
-  const tags = document.querySelectorAll('*[src], *[srcset], *[href], *[action], *[data-src]')
+  const root = document.createElement('div')
+  root.innerHTML = event.content
+  const tags = root.querySelectorAll('*[src], *[srcset], *[href], *[action], *[data-src]')
 
   // when mapping the tag of a document to the position in event.content
   // the start will help determine the correct position

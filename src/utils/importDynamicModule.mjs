@@ -3,6 +3,8 @@ import * as url from 'node:url'
 
 import resolve from './resolve.mjs'
 
+global.contexts = global.contexts || {}
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 
 /**
@@ -22,19 +24,21 @@ export default async function importDynamicModule (js, options = {}) {
   options.fileref = options.fileref || options.dir
 
   const importModuleFile = url.pathToFileURL(path.resolve(__dirname, '..', 'import.mjs')).href
+  const contextId = options.contextId || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const globalContextId = `${path.relative(process.cwd(), options.fileref) + contextId}`.replace(/[^a-zA-Z0-9]/g, '-')
+  global.contexts[globalContextId] = {
+    cwd: options.cwd,
+    dir: options.dir,
+    fileref: options.fileref,
+    variables: { ...options.variables }
+  }
 
-  const content = `// Cachebuster : ${Date.now()}\n` + js.replace(/[eimx]{2}port[^\n]+from[^'"]*["'](\.[^'"]+)["']/g, (match, filepath) => {
+  const content = `// Context : ${contextId}\n` + js.replace(/[eimx]{2}port[^\n]+from[^'"]*["'](\.[^'"]+)["']/g, (match, filepath) => {
     const file = resolve(filepath, [options.dir, options.cwd])
-    const importUrl = `${url.pathToFileURL(file).href}?cachebuster=${Date.now()}`
+    const importUrl = `${url.pathToFileURL(file).href}?id=${contextId}`
     return match.replace(filepath, importUrl)
   }).replace(/[eimx]{2}port[^\n]+from[^'"]*["'](@pascalsalesch\/pages)["']/g, (match, filepath) => {
-    return match.replace(filepath, `${importModuleFile}?${btoa(encodeURIComponent(JSON.stringify({
-      cachebuster: Date.now(),
-      cwd: options.cwd,
-      dir: options.dir,
-      fileref: options.fileref,
-      variables: { ...options.variables, include: undefined }
-    })))}`)
+    return match.replace(filepath, `${importModuleFile}?id=${globalContextId}`)
   })
 
   const importableContent = `data:text/javascript;base64,${btoa(content)}`
@@ -51,5 +55,7 @@ export default async function importDynamicModule (js, options = {}) {
     } else {
       throw err
     }
+  } finally {
+    delete global.contexts[contextId]
   }
 }

@@ -68,6 +68,7 @@ export default async function watch (pageBuilder, config, after) {
 
   // stop watching on exit
   process.on('SIGINT', async () => {
+    server.closeAllConnections()
     server.close()
     for (const watcher of watchers) watcher.close()
     if (typeof after === 'function') await after()

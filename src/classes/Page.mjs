@@ -1,4 +1,5 @@
 import * as path from 'node:path'
+import * as fs from 'node:fs'
 
 import threads from 'node:worker_threads'
 
@@ -240,10 +241,33 @@ export default class Page {
 
     const callback = await pageBuilder.workloadManager.next(this.id)
 
+    // check continue data
+    const todo = !(pageBuilder.continue)
+      ? workload
+      : workload.filter(({ urlPath }) => {
+        const output = path.resolve(pageBuilder.output, ...urlPath.split('/'))
+        if (fs.existsSync(output)) {
+          if (pageBuilder.verbose) console.log(`[PAGE] ${output} | Continue...`)
+          return false
+        }
+        return true
+      })
+
+    if (todo.length === 0) {
+      callback()
+      return
+    }
+
     // prepare the data for the workers
     const pageBuilderData = JSON.parse(JSON.stringify(pageBuilder))
     const pageData = { id: this.id, rel: this.rel }
-    const pagePath = new Path({ workload, pageBuilder, pageBuilderData, page: this, pageData })
+    const pagePath = new Path({
+      workload: todo,
+      pageBuilder,
+      pageBuilderData,
+      page: this,
+      pageData
+    })
 
     // build the page
     await pagePath.build()

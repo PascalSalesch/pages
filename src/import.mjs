@@ -2,13 +2,13 @@ import * as path from 'node:path'
 
 import _resolve from './utils/resolve.mjs'
 
-const dataRaw = new URL(import.meta.url).search.slice(1)
+const searchParams = new URL(import.meta.url).searchParams
 
 /**
  * The parsed raw data.
  * @type {object}
  */
-export const data = JSON.parse(decodeURIComponent(atob(dataRaw)))
+export const data = global.contexts[searchParams.get('id')]
 
 /**
  * The absolute path to the current module.
@@ -27,6 +27,14 @@ export const __dirname = data.fileref ? path.dirname(data.fileref) : null
  * @type {object}
  */
 export const variables = data.variables || {}
+
+/**
+ * Includes an HTML file.
+ * @type {function}
+ * @param {string} file - The file to include.
+ * @returns {Promise<string>} The included file.
+ */
+export const include = data.include
 
 /**
  * All variables that are available in the current module.

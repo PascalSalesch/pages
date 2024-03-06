@@ -44,14 +44,17 @@ export default class Path {
           stderr: !verbose
         }
       )
+      worker.setMaxListeners(0)
+      worker.memoryUsage = 0
       worker.workload = 0
+      worker.totalWorkload = 0
       worker.isAlive = true
       let interval
 
       worker.once('message', (message) => {
         if (message?.type === 'ready') {
           worker.on('message', this.#messageHandler)
-          setTimeout(() => { worker.isAlive = false }, 60000 + (5000 * Math.random())).unref()
+          setTimeout(() => { worker.isAlive = false }, 120000 + (5000 * Math.random())).unref()
           interval = setInterval(() => {
             worker.postMessage({ type: 'memoryUsage' })
           }, 10000)
@@ -129,17 +132,13 @@ export default class Path {
       if (verbose) console.log(`[Page] ${this.#pageData.id} | Memory usage: ${memory}% | Worker amount: ${workers.length}/${workerNum}`)
     }, 10000)
 
-    const maxMemoryUsage = 200 * 1024 * 1024 * 1024
-    const maxMemoryUsageThreshold = 10 * 1024 * 1024 * 1024
-    let doNotCreate = false
+    const maxMemoryUsage = 1 * 1024 * 1024 * 1024 // 1 GB, per worker
 
     // kills a worker after waiting for it to finish its workload
     const kill = async (worker) => {
       if (verbose) console.log(`[Page] ${this.#pageData.id} | Terminating worker`)
       await worker.kill()
-      workers.splice(workers.indexOf(worker), 1)
-      doNotCreate = true
-      setTimeout(() => { doNotCreate = false }, 10000)
+      while (workers.indexOf(worker) !== -1) workers.splice(workers.indexOf(worker), 1)
     }
 
     let promises = []
@@ -149,18 +148,19 @@ export default class Path {
       const memory = getMemoryUsageInPercent()
 
       // check worker amount
-      await Promise.all(workers.filter(worker => !worker.isAlive || worker.memoryUsage > maxMemoryUsage).map((worker) => kill(worker)))
-      if (workers.length > workerNum) {
-        const victim = workers.find(worker => !!worker)
+      // the kill function cleans up the workers array
+      workers.filter(worker => !worker.isAlive || (worker.memoryUsage > maxMemoryUsage)).map((worker) => kill(worker))
+      if (workers.filter(worker => worker.isAlive).length > workerNum) {
+        const victim = workers.sort((a, b) => a.memoryUsage - b.memoryUsage)[0]
         if (victim) await kill(victim)
         continue
       }
 
-      if (doNotCreate !== true || workers.length === 0) {
-        if (workers.length < workerNum) {
+      if (workers.length < workerNum) {
+        const newWorkers = workers.filter(worker => worker.totalWorkload === 0)
+        const isSafeToCreateWorker = workers.length < 4 || newWorkers.length < 4
+        if (isSafeToCreateWorker) {
           if (verbose) console.log(`[Page] ${this.#pageData.id} | Creating new worker`)
-          doNotCreate = true
-          setTimeout(() => { doNotCreate = false }, 10000).unref()
           workers.push(await this.#createWorker())
         }
       }
@@ -168,57 +168,82 @@ export default class Path {
       // check memory usage
       const createdAllAvailableWorkers = workers.length === workerNum
       const idle = this.#pageBuilder.workloadManager.getBusyness() === 1
-      if (memory < 27 && this.#workload.length > workerNum * 4 && createdAllAvailableWorkers && idle) {
+      if (memory < 20 && this.#workload.length > workerNum * 4 && createdAllAvailableWorkers && idle) {
         workerNum = Math.min(workerNum + 1, maxWorkers, this.#workload.length)
       }
 
-      if (memory > 40) {
+      if (memory > 35) {
         if (verbose) console.log(`[Page] ${this.#pageData.id} | Memory limit reached, reducing worker number`)
         workerNum -= 1
         continue
       }
 
-      // build
-      while (this.#workload.length && promises.length < workers.length) {
-        const workload = this.#workload.shift()
-        const promise = new Promise((resolve, reject) => {
-          const worker = workers
-            .filter((worker) => {
-              if (!worker.isAlive) return false
-              if (worker.memoryUsage > (maxMemoryUsage - maxMemoryUsageThreshold)) return false
-              return true
-            }).sort((a, b) => a.workload - b.workload)?.[0]
-          if (!worker) return setTimeout(() => { resolve('No worker available') }, 10000).unref()
-          worker.workload += 1
+      // state
+      if (verbose) console.log(`[Page] ${workers.length}/${workerNum} | memory: ${memory}% | `, workers.map(w => `${w.workload}/${w.totalWorkload}`).join(', '))
 
-          Promise.race([
-            worker.build(workload),
-            new Promise((resolve, reject) => {
-              setTimeout(() => {
-                if (!promise.isDone) reject(new Error(`Timeout for ${workload.urlPath}`))
-              }, 180000).unref()
-            })
-          ])
-            .then(() => {
-              promise.isDone = true
-              worker.workload -= 1
-              resolve()
-            })
-            .catch((error) => {
-              this.#workload.unshift(workload)
-              promise.isDone = true
-              worker.workload -= 1
-              console.error(error)
-              resolve()
-            })
+      // build
+      const healthyWorkers = workers.filter((w) => w.isAlive && w.totalWorkload > 0 && w.memoryUsage < maxMemoryUsage).length
+      const newWorkers = workers.filter(worker => worker.totalWorkload === 0).length
+      const healthy = Math.max(4, ((healthyWorkers * 4) + newWorkers))
+      const availableWorker = () => workers.find(worker => worker.isAlive && worker.workload === 0)
+      const select = (a, b) => {
+        // grace period for new workers
+        const ar = a.totalWorkload === 0 && a.workload > 0
+        const br = b.totalWorkload === 0 && b.workload > 0
+        if (ar && !br) return 1
+        if (br && !ar) return -1
+
+        // select worker with least workload, then least total workload
+        const r = a.workload - b.workload
+        if (r !== 0) return r
+        return a.totalWorkload - b.totalWorkload
+      }
+
+      while (this.#workload.length && (promises.length < healthy || availableWorker())) {
+        const workload = this.#workload.shift()
+        const worker = availableWorker() || workers.filter((worker) => worker.isAlive && worker.memoryUsage < maxMemoryUsage).sort(select)?.[0]
+
+        if (!worker) {
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          break
+        }
+
+        worker.workload += 1
+        const promise = new Promise((resolve, reject) => {
+          const build = worker.build(workload)
+          const retry = (forceUnshift) => {
+            if (!promise.isDone || forceUnshift) this.#workload.unshift(workload)
+            if (promise.isDone) return
+            resolve()
+          }
+          const timeout = setTimeout(retry, 600000)
+
+          build.then(() => {
+            clearTimeout(timeout)
+            if (!promise.isDone) resolve()
+          })
+
+          build.catch((err) => {
+            console.error(err)
+            retry(true)
+          })
         })
+        promise.finally(() => { promise.isDone = true; worker.workload -= 1; worker.totalWorkload += 1 })
         promises.push(promise)
       }
 
-      if (promises.length) await Promise.race(promises)
+      if (workers.length < workerNum) {
+        const promise = new Promise((resolve) => setTimeout(resolve, 2000))
+        promise.isDone = true
+        promises.push(promise)
+      }
+
+      const canTakeMoreWork = this.#workload.length && promises.length < healthy
+      if (canTakeMoreWork && workers.find(worker => worker.workload < 3)) continue
+      else if (promises.length) await Promise.race(promises)
     }
 
-    await Promise.all(promises)
+    await Promise.all(promises.filter((promise) => !promise.isDone))
     await Promise.all(workers.map((worker) => worker.kill()))
     clearInterval(interval)
   }

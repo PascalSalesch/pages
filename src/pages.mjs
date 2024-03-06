@@ -14,12 +14,13 @@ process.nextTick(async () => {
   const output = getCliArgs('output', 'string', { defaultValue: undefined })
   const port = getCliArgs('port', 'string', { defaultValue: undefined })
   const watch = getCliArgs('watch', 'flag', { defaultValue: undefined })
+  const contin = getCliArgs('continue', 'flag', { defaultValue: false })
   const build = getCliArgs('build', 'flag', { defaultValue: true })
   const verbose = getCliArgs('verbose', 'flag', { defaultValue: undefined })
   const prefix = getCliArgs('prefix', 'string', { defaultValue: '' })
   const suffix = getCliArgs('suffix', 'string', { defaultValue: '' })
   const keep = getCliArgs('keep', 'list', { defaultValue: [] })
-  await main({ cwd, build, output, watch, port, verbose, prefix, suffix, keep })
+  await main({ cwd, build, output, watch, port, verbose, prefix, suffix, keep, continue: contin })
 })
 
 /**
@@ -58,6 +59,7 @@ async function main (options = {}) {
   if (options.prefix) config.prefix = options.prefix
   if (options.suffix) config.suffix = options.suffix
   if (options.keep) config.keep = options.keep
+  if (options.continue) config.continue = options.continue
 
   // create a new PageBuilder instance
   const builder = new PageBuilder(config)

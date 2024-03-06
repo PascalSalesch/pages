@@ -120,6 +120,7 @@ export async function getUrlValues (file, pageBuilder) {
   const allValues = {}
   for (const script of scripts) {
     const values = await importDynamicModule(script, {
+      contextId: path.relative(process.cwd(), file).replace(/[^a-zA-Z0-9]/g, '-'),
       cwd: pageBuilder.cwd,
       dir: path.dirname(file),
       fileref: file

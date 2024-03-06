@@ -64,6 +64,7 @@ export default class PageBuilder extends events.EventEmitter {
    * @param {object} options - Options.
    * @param {string} [options.cwd=process.cwd()] - The current working directory.
    * @param {boolean} [options.verbose=false] - Whether to log verbose output.
+   * @param {boolean} [options.continue=false] - Continue where the last build left off.
    * @param {function} [options.preflight] - A function that is called for each file before it is parsed with the intention to filter out files that should not be parsed as index pages.
    * @param {function} [options.page] - A function that is called for each page that is created.
    * @param {function} [options.meta] - A function that is called for each page that is created to add meta information to the page.
@@ -81,6 +82,7 @@ export default class PageBuilder extends events.EventEmitter {
     this.prefix = (options.prefix && (options.prefix.startsWith('/') ? options.prefix : `/${options.prefix}`)) || ''
     this.suffix = options.suffix || ''
     this.keep = options.keep || []
+    this.continue = options.continue || false
 
     if (this.verbose) {
       // preflight is emitted for all files that are read and can be used to filter out files that should not be parsed
@@ -238,7 +240,7 @@ export default class PageBuilder extends events.EventEmitter {
     }
 
     // create a clean output directory
-    if (fs.existsSync(this.output)) await clean(this.output, { keep: this.keep })
+    if (fs.existsSync(this.output) && !this.continue) await clean(this.output, { keep: this.keep })
     if (!(fs.existsSync(this.output))) fs.mkdirSync(this.output, { recursive: true })
 
     // build each page

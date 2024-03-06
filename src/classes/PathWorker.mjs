@@ -62,9 +62,11 @@ threads.parentPort.on('message', async (message) => {
       if (message.type === 'build') {
         const options = message.build
         if (typeof pagesrc.beforeEach === 'function') await pagesrc.beforeEach()
+        pageBuilder.urlPaths[options.urlPath] = page.id
         await buildPath.call(page, options.urlPath, { ...options, pageBuilder })
         if (typeof pagesrc.afterEach === 'function') await pagesrc.afterEach()
         threads.parentPort.postMessage({ type: 'build', build: options })
+        delete pageBuilder.urlPaths[options.urlPath]
       }
     })
 
@@ -102,8 +104,10 @@ function message (type, data) {
  * @param {object} [options.replace={}] - The values to replace in the content.
  */
 async function buildPath (urlPath, options = {}) {
-  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Building ${urlPath}`)
-  const interval = (options.pageBuilder.verbose) ? setInterval(() => console.log(`[Path] ${this.id} | ${urlPath} is still building`), 20000) : null
+  const start = Date.now()
+  const elapsed = () => `${((Date.now() - start) / 1000).toFixed(2)}s`
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | Start Building Path...`)
+  const interval = (options.pageBuilder.verbose) ? setInterval(() => console.log(`[Path] ${this.id} | ${urlPath} | Building...`), 60000) : null
 
   // get content and sources
   options.variables = Object.assign(options.variables, options.pageBuilder.getVariables(this))
@@ -122,20 +126,24 @@ async function buildPath (urlPath, options = {}) {
       }
     }
   })()
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | (${elapsed()}) Got content and sources...`)
 
   // add files that modify the content as dependencies.
   await message('addSource', sources)
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | (${elapsed()}) Added sources...`)
 
   // Create sub-pages
   const { dependencies } = await options.pageBuilder.getDependencies(this, { urlPath, content, variables: options.variables })
   for (const { id, rel } of dependencies) {
     await message('getOrCreateSubpage', { id, rel })
   }
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | (${elapsed()}) Added dependencies...`)
 
   // create the file content
   let fileContent = dependencies.length ? await getContent(content) : content
 
   // Wait for sub-pages to be build
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | (${elapsed()}) Waiting for subpages`)
   await message('waitForSubpages')
 
   // wait for the urlPath to be available for all sub-pages.
@@ -147,27 +155,19 @@ async function buildPath (urlPath, options = {}) {
     subpageBuildPromises.push(message('subpageBuild', { id }))
   }
   if (subpageBuildPromises.length) await Promise.all(subpageBuildPromises)
-
-  if (options.pageBuilder.verbose) {
-    console.log(`[Path] ${this.id} | Subpages of ${urlPath} are ready`)
-  }
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | (${elapsed()}) Subpages are ready`)
 
   // wait for dependencies with integrity checks to be done building
   // additionally rebuild the page when the dependencies hash changes
   const integrityCheckPromises = []
   for (const { id, outerHTML } of dependencies) {
-    if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Checking integrity of ${id}`)
     if (!(outerHTML.includes('integrity='))) continue
     if (id === this.id) continue
-    if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Add subpage ${id}`)
     integrityCheckPromises.push(message('subpageBuild', { id }))
-    if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Add subpage ${id} (2)`)
     await message('addSource', [id])
-    if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Add source ${id}`)
   }
-  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${integrityCheckPromises.length} Sources are added to ${urlPath}`)
   await Promise.all(integrityCheckPromises)
-  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Integrity checks of ${urlPath} are done`)
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | (${elapsed()}) Integrity checks are done`)
 
   // replace the dependencies src with the url path
   const variableValues = Object.values(options.variables).flat().filter((v) => typeof v === 'string') || []
@@ -258,10 +258,11 @@ async function buildPath (urlPath, options = {}) {
       }
     }
   }
-  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | Replaced dependencies of ${urlPath}`)
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | (${elapsed()}) Replaced dependencies...`)
 
-  // // emit event to modify the content
+  // emit event to modify the content
   fileContent = await options.pageBuilder.transform(this, { content: fileContent, url: urlPath })
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | (${elapsed()}) File content is ready...`)
 
   // write the file
   const output = path.resolve(options.pageBuilder.output, ...urlPath.split('/'))
@@ -280,4 +281,5 @@ async function buildPath (urlPath, options = {}) {
   }
 
   if (interval) clearInterval(interval)
+  if (options.pageBuilder.verbose) console.log(`[Path] ${this.id} | ${urlPath} | (${elapsed()}) Done.`)
 }

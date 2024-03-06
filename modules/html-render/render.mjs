@@ -7,6 +7,8 @@ import splitByTemplateLiterals from '../../src/utils/splitByTemplateLiterals.mjs
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 
+const cache = new Map()
+
 /**
  * @typedef {object} renderInput - The context of an include. Either content or filePath must be provided.
  * @property {string} [renderInput.content] - The content of the page.
@@ -54,6 +56,7 @@ export default async function render (renderInput, options = {}) {
   includeContext.fileref = includeContext.main
   includeContext.pageBuilder = options.pageBuilder
   includeContext.page = options.page
+  includeContext.contextId = options.contextId || `${JSON.stringify(includeContext.variables)}`.replace(/[^a-zA-Z0-9]/g, '-')
 
   // start parsing
   const content = await include.call(includeContext, includeContext.main)
@@ -77,8 +80,11 @@ export default async function render (renderInput, options = {}) {
 async function include (fileref) {
   fileref = resolve(fileref, [this.dir, this.cwd])
   this.sources.push(fileref)
-  const fileContent = await fs.promises.readFile(fileref, { encoding: 'utf-8' })
   const ctx = { ...this, fileref, dir: path.dirname(fileref) }
+
+  const fileContent = cache.get(fileref) || await fs.promises.readFile(fileref, { encoding: 'utf-8' })
+  cache.set(fileref, fileContent)
+  setTimeout(() => cache.delete(fileref), 1000 * 60 * 3).unref()
 
   // prepare the content for rendering
   const contentBeforeRender = fileContent
@@ -165,6 +171,7 @@ async function getRenderData (content, ctx) {
   const variables = ctx.variables
   for (const script of scripts) {
     Object.assign(variables, await importDynamicModule(script, {
+      contextId: ctx.contextId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       cwd: ctx.cwd,
       dir: ctx.dir,
       fileref: ctx.fileref,
