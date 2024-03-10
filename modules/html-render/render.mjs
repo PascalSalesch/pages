@@ -77,10 +77,10 @@ export default async function render (renderInput, options = {}) {
  * @param {string} fileref - The absolute path to the file.
  * @returns {string} - The content of the file.
  */
-async function include (fileref) {
+async function include (fileref, params = null) {
   fileref = resolve(fileref, [this.dir, this.cwd])
   this.sources.push(fileref)
-  const ctx = { ...this, fileref, dir: path.dirname(fileref) }
+  const ctx = { ...this, fileref, dir: path.dirname(fileref), _includeParams: params }
 
   const fileContent = cache.get(fileref) || await fs.promises.readFile(fileref, { encoding: 'utf-8' })
   cache.set(fileref, fileContent)
@@ -149,8 +149,10 @@ async function include (fileref) {
  * @returns {Promise<{content:string,variables:object}>} - The content of the page and the values of the <script target="body"></script> tags.
  */
 async function getRenderData (content, ctx) {
-  const regex = /<script([^>]*)>((?:(?!<\/script>)[\s\S])*?)<\/script>/gi
+  const regex = /<script([^>]*)>((?:(?!<\/script>)[\s\S])+?)<\/script>/gi
   const scripts = []
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const staticScripts = {}
 
   content = content.replace(regex, (match, attributes, value) => {
     const targetUrlMatch = attributes.match(/target=["']url["']/i)
@@ -165,7 +167,13 @@ async function getRenderData (content, ctx) {
       return ''
     }
 
-    return match
+    if (!match.includes('${')) return match
+
+    const staticId = `static-${id}-${Object.keys(staticScripts).length}`
+    const content = match.replace(value, staticId)
+    const newContent = match.replace(value, value.replaceAll('${', '\\${'))
+    staticScripts[staticId] = { find: content, replace: newContent }
+    return content
   })
 
   const variables = ctx.variables
@@ -175,15 +183,22 @@ async function getRenderData (content, ctx) {
       cwd: ctx.cwd,
       dir: ctx.dir,
       fileref: ctx.fileref,
-      variables: ctx.variables
+      variables: ctx.variables,
+      params: ctx._includeParams
     }))
   }
 
   // escape backticks in the content, but not in the variables
   content = splitByTemplateLiterals(content).reduce((content, part) => {
-    if (part.type === 'static') return content + part.value.replaceAll('`', '\\`')
+    if (part.type === 'static') {
+      return content + part.value.replaceAll('`', '\\`')
+    }
     return content + `\${${part.value}}`
   }, '')
+
+  for (const { find, replace } of Object.values(staticScripts)) {
+    content = content.replaceAll(find, replace.replaceAll('`', '\\`'))
+  }
 
   return { content, variables }
 }

@@ -37,6 +37,12 @@ export const variables = data.variables || {}
 export const include = data.include
 
 /**
+ * The parsed raw data.
+ * @type {object}
+ */
+export const params = data.params || {}
+
+/**
  * All variables that are available in the current module.
  * @type {string}
  */

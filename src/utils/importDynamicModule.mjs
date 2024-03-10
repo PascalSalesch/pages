@@ -25,12 +25,14 @@ export default async function importDynamicModule (js, options = {}) {
 
   const importModuleFile = url.pathToFileURL(path.resolve(__dirname, '..', 'import.mjs')).href
   const contextId = options.contextId || `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  const globalContextId = `${path.relative(process.cwd(), options.fileref) + contextId}`.replace(/[^a-zA-Z0-9]/g, '-')
+  const paramsId = options.params ? JSON.stringify(options.params) : ''
+  const globalContextId = `${path.relative(process.cwd(), options.fileref) + contextId + paramsId}`.replace(/[^a-zA-Z0-9]/g, '-')
   global.contexts[globalContextId] = {
     cwd: options.cwd,
     dir: options.dir,
     fileref: options.fileref,
-    variables: { ...options.variables }
+    variables: { ...options.variables },
+    params: options.params
   }
 
   const content = `// Context : ${contextId}\n` + js.replace(/[eimx]{2}port[^\n]+from[^'"]*["'](\.[^'"]+)["']/g, (match, filepath) => {
